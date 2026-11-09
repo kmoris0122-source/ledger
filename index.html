@@ -1162,9 +1162,12 @@ function setMonth(m){ S.month=m; S.expenses=[]; render(); if(S.db) subExpenses()
 // ---------- 데이터 연결 ----------
 function status(msg, tone){ const el=document.getElementById("status"); if(!msg){ el.hidden=true; return; } el.textContent=msg; el.dataset.tone=tone||""; el.hidden=false; }
 function onErr(e){ console.error(e); if(e&&e.code==="revoked"){ status("로그인이 만료됐어요. 앱을 다시 열어주세요.","warn"); } else status("일부 데이터를 불러오지 못했어요. 페이지를 다시 열어주세요.","warn"); }
+// 단축어에서 "카페, 간식"·"카페간식"처럼 들어온 분류를 앱 분류 이름으로 맞춤
+const CAT_KEY=c=>String(c||"").replace(/[\s,·.ㆍ・/]/g,"");
+function normCat(e){ if(!e.category||VAR_CATS.includes(e.category)) return e; const m=VAR_CATS.find(c=>CAT_KEY(c)===CAT_KEY(e.category)); return m? {...e,category:m} : e; }
 function subExpenses(){
   if(S.unsubExp) S.unsubExp();
-  S.unsubExp = S.db.collection("expenses").where("month","==",S.month).onSnapshot(s=>{ S.expenses=docs(s); render(); }, onErr);
+  S.unsubExp = S.db.collection("expenses").where("month","==",S.month).onSnapshot(s=>{ S.expenses=docs(s).map(normCat); render(); }, onErr);
 }
 // ---------- Supabase 저장소 (기존 앱의 db 인터페이스를 그대로 흉내) ----------
 const SUPA_URL="https://cwyvuiwfrkelnmpmynzk.supabase.co";
@@ -1255,7 +1258,7 @@ function start(){
   db.collection("investSnap").onSnapshot(live(s=>S.snaps=docs(s)), onErr);
   db.collection("debts").onSnapshot(live(s=>S.debts=docs(s)), onErr);
   db.collection("plans").onSnapshot(live(s=>S.plans=docs(s)), onErr);
-  db.collection("expenses").where("month",">=",shiftMonth(ym(new Date()),-2)).onSnapshot(s=>{ S.recent=docs(s); }, onErr);
+  db.collection("expenses").where("month",">=",shiftMonth(ym(new Date()),-2)).onSnapshot(s=>{ S.recent=docs(s).map(normCat); }, onErr);
   db.collection("dcLog").onSnapshot(live(s=>S.dc=docs(s)), onErr);
   db.doc("settings/main").onSnapshot(live(s=>S.settings=s.exists? s.data() : {}), onErr);
   subExpenses();
