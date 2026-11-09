@@ -1096,21 +1096,37 @@ document.getElementById("prevM").addEventListener("click",()=>setMonth(shiftMont
 document.getElementById("nextM").addEventListener("click",()=>setMonth(shiftMonth(S.month,1)));
 document.addEventListener("keydown",e=>{ if(e.key==="Escape") closeSheet(); if((e.key==="Enter"||e.key===" ") && e.target.matches?.(".tappable")){ e.preventDefault(); openIncenDetail(); } });
 const TAB_ORDER=["home","spend","fixed","invest","todo"];
-function setTab(tab, dir){
+const VIEWS={home:vHome,spend:vSpend,fixed:vFixed,invest:vInvest,todo:vTodo};
+function setTab(tab, dir, noAnim){
   // 지금 탭을 다시 누르면 맨 위로 스르륵
   if(tab===S.tab && !dir){ window.scrollTo({top:0,behavior:"smooth"}); return; }
   if(!dir) dir = TAB_ORDER.indexOf(tab) > TAB_ORDER.indexOf(S.tab) ? 1 : -1;
   S.tab=tab; try{ localStorage.setItem("ledger.tab",tab);}catch(e){} render(); window.scrollTo(0,0);
   const v=document.getElementById("view"); v.style.transition="none"; v.style.transform=""; v.style.opacity="";
-  v.classList.remove("in-left","in-right"); void v.offsetWidth; v.classList.add(dir>0?"in-right":"in-left");
+  v.classList.remove("in-left","in-right"); if(noAnim) return; void v.offsetWidth; v.classList.add(dir>0?"in-right":"in-left");
 }
-// 좌우로 쓸어서 탭 이동 (시트가 열려 있거나 가로 스크롤 영역·입력칸에서는 무시)
+// 좌우로 쓸어서 탭 이동: 옆 탭 화면이 손가락을 따라 함께 밀려 들어옴
 (function(){
-  const v=()=>document.getElementById("view");
-  let x0=0,y0=0,t0=0,dx=0,mode=null;
+  const GAP=16, v=()=>document.getElementById("view");
+  let x0=0,y0=0,t0=0,dx=0,mode=null,peek=null,nextTab=null,W=0;
   const hScroll=el=>{ for(let n=el;n&&n!==document.body;n=n.parentElement){ if(n.scrollWidth>n.clientWidth+2 && /auto|scroll/.test(getComputedStyle(n).overflowX)) return true; } return false; };
+  const reduce=()=>matchMedia("(prefers-reduced-motion: reduce)").matches;
+  function makePeek(dir){
+    const i=TAB_ORDER.indexOf(S.tab)+dir; nextTab=TAB_ORDER[i]||null; if(!nextTab) return;
+    const el=v(), r=el.getBoundingClientRect(); W=r.width;
+    peek=document.createElement("div"); peek.className="wrap"; peek.setAttribute("aria-hidden","true");
+    peek.style.cssText=`position:fixed;z-index:1;pointer-events:none;top:${el.offsetTop}px;left:${r.left}px;width:${W}px;bottom:0;overflow:hidden;margin:0;will-change:transform;transform:translateX(${dir*(W+GAP)}px)`;
+    try{ peek.innerHTML=VIEWS[nextTab](calc()); }catch(e){ peek=null; nextTab=null; return; }
+    document.body.appendChild(peek);
+  }
+  const clearPeek=()=>{ if(peek){ peek.remove(); peek=null; } nextTab=null; };
+  function place(x,anim){
+    const el=v(), dir=x<0?1:-1, t=anim?"transform .28s cubic-bezier(.22,1,.36,1)":"none";
+    el.style.transition=t; el.style.transform=x?`translateX(${x}px)`:"";
+    if(peek){ peek.style.transition=t; peek.style.transform=`translateX(${x+dir*(W+GAP)}px)`; }
+  }
   document.addEventListener("touchstart",e=>{
-    mode=null; if(e.touches.length!==1) return;
+    mode=null; if(e.touches.length!==1||peek) return;
     const t=e.target; if(t.closest("#sheetHost .scrim,#login,nav.tabs,input,textarea,select")||hScroll(t)) return;
     const p=e.touches[0]; if(p.clientX<16||p.clientX>innerWidth-16) return;
     x0=p.clientX; y0=p.clientY; t0=performance.now(); dx=0; mode="wait";
@@ -1118,17 +1134,26 @@ function setTab(tab, dir){
   document.addEventListener("touchmove",e=>{
     if(!mode||mode==="no") return;
     const p=e.touches[0], ddx=p.clientX-x0, ddy=p.clientY-y0;
-    if(mode==="wait"){ if(Math.abs(ddx)<10&&Math.abs(ddy)<10) return; mode = Math.abs(ddx)>Math.abs(ddy)*1.4 ? "x" : "no"; if(mode!=="x") return; }
-    dx=ddx; const i=TAB_ORDER.indexOf(S.tab), edge=(dx>0&&i===0)||(dx<0&&i===TAB_ORDER.length-1);
-    const el=v(); el.classList.remove("in-left","in-right"); el.style.transition="none";
-    el.style.transform=`translateX(${dx*(edge?.15:.35)}px)`; el.style.opacity=String(1-Math.min(.35,Math.abs(dx)/900));
+    if(mode==="wait"){ if(Math.abs(ddx)<10&&Math.abs(ddy)<10) return; mode = Math.abs(ddx)>Math.abs(ddy)*1.4 ? "x" : "no"; if(mode!=="x") return;
+      v().classList.remove("in-left","in-right"); if(!reduce()) makePeek(ddx<0?1:-1); }
+    // 처음 민 방향과 반대로 넘어가면 옆 화면 다시 준비
+    const want=ddx<0?1:-1, have=nextTab? (TAB_ORDER.indexOf(nextTab)>TAB_ORDER.indexOf(S.tab)?1:-1) : 0;
+    if(nextTab && have!==want){ clearPeek(); makePeek(want); }
+    dx = nextTab||reduce() ? ddx : ddx*.18;   // 끝 탭에서는 살짝만 튕김
+    place(dx,false);
   },{passive:true});
   const end=()=>{
     if(mode!=="x"){ mode=null; return; } mode=null;
-    const el=v(), i=TAB_ORDER.indexOf(S.tab), dt=performance.now()-t0, fast=Math.abs(dx)/dt>.45;
-    const next = (Math.abs(dx)>70||(fast&&Math.abs(dx)>30)) ? i+(dx<0?1:-1) : i;
-    if(next!==i && next>=0 && next<TAB_ORDER.length){ setTab(TAB_ORDER[next], dx<0?1:-1); return; }
-    el.style.transition="transform .25s cubic-bezier(.22,1,.36,1),opacity .25s"; el.style.transform=""; el.style.opacity="";
+    const dt=performance.now()-t0, fast=Math.abs(dx)/dt>.45, go=nextTab && (Math.abs(dx)>W*.28||(fast&&Math.abs(dx)>30));
+    if(go){
+      const tab=nextTab, dir=dx<0?1:-1;
+      place(-dir*(W+GAP),true);
+      setTimeout(()=>{ clearPeek(); setTab(tab,dir,true); },280);
+    }else if(reduce() && Math.abs(dx)>70){
+      const i=TAB_ORDER.indexOf(S.tab)+(dx<0?1:-1); place(0,false); if(TAB_ORDER[i]) setTab(TAB_ORDER[i],dx<0?1:-1,true);
+    }else{
+      place(0,true); setTimeout(clearPeek,290);
+    }
   };
   document.addEventListener("touchend",end,{passive:true}); document.addEventListener("touchcancel",end,{passive:true});
 })();
