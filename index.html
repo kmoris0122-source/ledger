@@ -237,6 +237,8 @@ html,body{touch-action:manipulation}
   @keyframes inL{from{transform:translateX(-36px);opacity:.3}}
   @keyframes inR{from{transform:translateX(36px);opacity:.3}}
 }
+.live{color:var(--muted)}.live.on{color:var(--up)}.live.on::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:currentColor;margin-right:4px;vertical-align:1px;animation:blink 1.6s infinite}
+@keyframes blink{50%{opacity:.25}}
 #login{position:fixed;inset:0;z-index:50;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:24px}
 #login[hidden]{display:none}
 #login form{width:100%;max-width:360px;background:var(--surface);border-radius:24px;padding:28px 22px;display:flex;flex-direction:column;gap:14px}
@@ -753,7 +755,7 @@ function vInvest(c){
   const snaps=[...S.snaps].sort((a,b)=>a.id.localeCompare(b.id));
   return `
   <section class="card">
-    <h2>전체 <span class="muted small">월 납입 ${won(c.invMonthly)}</span></h2>
+    <h2>전체 <span class="muted small">${liveLabel()}월 납입 ${won(c.invMonthly)}</span></h2>
     ${S.invest.length? invSummary(c,false)+invBars()+invTrend(snaps) : `<div class="empty">계좌별로 원금과 현재 평가액을 적어주세요. 평가액은 한 달에 한 번 정도 증권사 앱을 보고 고치면 충분해요.</div>`}
   </section>
   ${vDc(c)}
@@ -1102,6 +1104,7 @@ function setTab(tab, dir, noAnim){
   if(tab===S.tab && !dir){ window.scrollTo({top:0,behavior:"smooth"}); return; }
   if(!dir) dir = TAB_ORDER.indexOf(tab) > TAB_ORDER.indexOf(S.tab) ? 1 : -1;
   S.tab=tab; try{ localStorage.setItem("ledger.tab",tab);}catch(e){} render(); window.scrollTo(0,0);
+  if(tab==="invest") refreshLive();
   const v=document.getElementById("view"); v.style.transition="none"; v.style.transform=""; v.style.opacity="";
   v.classList.remove("in-left","in-right"); if(noAnim) return; void v.offsetWidth; v.classList.add(dir>0?"in-right":"in-left");
 }
@@ -1165,6 +1168,21 @@ function onErr(e){ console.error(e); if(e&&e.code==="revoked"){ status("로그�
 // 단축어에서 "카페, 간식"·"카페간식"처럼 들어온 분류를 앱 분류 이름으로 맞춤
 const CAT_KEY=c=>String(c||"").replace(/[\s,·.ㆍ・/]/g,"");
 function normCat(e){ if(!e.category||VAR_CATS.includes(e.category)) return e; const m=VAR_CATS.find(c=>CAT_KEY(c)===CAT_KEY(e.category)); return m? {...e,category:m} : e; }
+// ---------- 장중 실시간 시세 (평일 09:00~15:30, 앱이 열려 있을 때 1분마다) ----------
+function kstNow(){ const d=new Date(Date.now()+9*3600e3); return {day:d.getUTCDay(), min:d.getUTCHours()*60+d.getUTCMinutes(), date:d.toISOString().slice(0,10)}; }
+function marketOpen(){ const k=kstNow(); return k.day>=1 && k.day<=5 && k.min>=9*60 && k.min<=15*60+31; }
+function liveLabel(){
+  const t=S.invest.map(x=>x.liveAt||"").sort().pop()||""; const k=kstNow();
+  if(!t || t.slice(0,10)!==k.date) return "";
+  return `<span class="live${marketOpen()?" on":""}">${marketOpen()?"실시간 ":""}${t.slice(11)} 시세</span> · `;
+}
+let liveBusy=false;
+async function refreshLive(force){
+  if(liveBusy || !S.db || document.visibilityState!=="visible") return;
+  if(!force && !marketOpen()) return;
+  if(!["invest","home"].includes(S.tab)) return;
+  liveBusy=true; try{ await sb.rpc("refresh_prices"); }catch(e){ console.error(e); } finally{ liveBusy=false; }
+}
 function subExpenses(){
   if(S.unsubExp) S.unsubExp();
   S.unsubExp = S.db.collection("expenses").where("month","==",S.month).onSnapshot(s=>{ S.expenses=docs(s).map(normCat); render(); }, onErr);
@@ -1263,7 +1281,8 @@ function start(){
   db.doc("settings/main").onSnapshot(live(s=>S.settings=s.exists? s.data() : {}), onErr);
   subExpenses();
   db.live();
-  document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible") db.refresh(); });
+  setTimeout(refreshLive,1500); setInterval(refreshLive,60000);
+  document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible"){ db.refresh(); refreshLive(); } });
   sb.auth.onAuthStateChange((ev)=>{ if(ev==="SIGNED_OUT"){ location.reload(); } });
 }
 boot();
