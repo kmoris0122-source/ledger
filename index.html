@@ -230,7 +230,7 @@ nav.tabs button[aria-current="page"]{color:var(--ink);font-weight:700}
 }
 .netbox summary{list-style:none;cursor:pointer}.netbox summary::-webkit-details-marker{display:none}.netbox[open] summary .small{visibility:hidden}
 html,body{touch-action:manipulation}
-#view{will-change:transform}
+#view{will-change:transform;width:100%;box-sizing:border-box}
 @media (prefers-reduced-motion:no-preference){
   #view.in-left{animation:inL .26s cubic-bezier(.22,1,.36,1)}
   #view.in-right{animation:inR .26s cubic-bezier(.22,1,.36,1)}
