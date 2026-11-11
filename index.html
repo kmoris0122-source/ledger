@@ -368,9 +368,16 @@ function planCalc(c){
 }
 
 // ---------- 한 줄 진단 ----------
+function unplannedStats(){
+  const list=S.expenses.filter(e=>e.unplanned && !e.plan), prevM=shiftMonth(S.month,-1);
+  const prev=S.recent.filter(e=>e.month===prevM && e.unplanned && !e.plan);
+  return {list, total:sum(list,own), prevTotal: S.recent.some(e=>e.month===prevM)? sum(prev,own) : null};
+}
 function insights(c, pc){
   const out=[];
   pc.plans.forEach(p=>{ const a=pc.byPlan[p.id]||0, b=Number(p.budget)||0; if(b && a>b) out.push({tone:"bad", html:`<b>${esc(p.name)}</b> 예산을 <b class="num">${won(a-b)}</b> 넘었어요`}); });
+  { const u=unplannedStats(); if(u.list.length) out.push({tone: u.prevTotal!=null && u.total>u.prevTotal? "warn":"", go:"unp",
+      html:`계획 외 소비 <b class="num">${u.list.length}건 · ${won(u.total)}</b>${u.prevTotal!=null?` (지난달 ${u.prevTotal? man(u.prevTotal) : "없음"})`:""}`}); }
   if(pc.budget && pc.dayNow){
     const th=pc.budget*.05;
     if(pc.diff>th) out.push({tone: pc.diff>pc.budget*.15?"bad":"warn", html:`계획보다 <b class="num">${won(pc.diff)}</b> 빠르게 쓰고 있어요`});
@@ -399,7 +406,7 @@ function vInsight(c, pc){
   if(!list.length) return "";
   return `<section class="card insight">
     <h2>이번 달 한눈에</h2>
-    <ul class="ins">${list.map(i=>`<li><i class="dot ${i.tone}"></i><span>${i.html}</span></li>`).join("")}</ul>
+    <ul class="ins">${list.map(i=>`<li${i.go?` data-unp-go style="cursor:pointer"`:""}><i class="dot ${i.tone}"></i><span>${i.html}${i.go?` <span class="muted">›</span>`:""}</span></li>`).join("")}</ul>
   </section>`;
 }
 
@@ -663,16 +670,22 @@ function invSummary(c, showNet = true){
 function expRow(e){
   return `<button class="item" data-edit="expense" data-id="${e.id}">
     <span class="t">${esc(e.memo||e.category)}</span><span class="a num">${won(e.amount)}${Number(e.reimb)>0?`<small>내 몫 ${won(own(e))}</small>`:""}</span>
-    <span class="m"><span class="pill ${methodOf(e)==="인센"?"good":""}" style="padding:1px 7px;font-size:11px">${methodOf(e)}</span>${e.auto?` <span class="pill" style="padding:1px 7px;font-size:11px">자동</span>`:""} ${esc(e.category)}${e.plan&&planName(e.plan)?` · <span style="color:var(--accent)">${esc(planName(e.plan))}</span>`:""}${Number(e.reimb)>0?` · 정산 ${man(e.reimb)} ${e.reimbDone?"받음":"받기 전"}`:""}</span></button>`;
+    <span class="m"><span class="pill ${methodOf(e)==="인센"?"good":""}" style="padding:1px 7px;font-size:11px">${methodOf(e)}</span>${e.auto?` <span class="pill" style="padding:1px 7px;font-size:11px">자동</span>`:""}${e.unplanned?` <span class="pill warn" style="padding:1px 7px;font-size:11px">계획 외</span>`:""} ${esc(e.category)}${e.plan&&planName(e.plan)?` · <span style="color:var(--accent)">${esc(planName(e.plan))}</span>`:""}${Number(e.reimb)>0?` · 정산 ${man(e.reimb)} ${e.reimbDone?"받음":"받기 전"}`:""}</span></button>`;
 }
 function vSpend(c){
   const budget=Number(S.settings.varBudget)||0;
-  const toggle=`<div class="seg" role="tablist"><button role="tab" aria-selected="${S.spendView==="cal"}" data-spendview="cal">달력</button><button role="tab" aria-selected="${S.spendView==="list"}" data-spendview="list">목록</button></div>`;
+  const toggle=`<div class="seg" role="tablist"><button role="tab" aria-selected="${S.spendView==="cal"}" data-spendview="cal">달력</button><button role="tab" aria-selected="${S.spendView==="list"}" data-spendview="list">목록</button><button role="tab" aria-selected="${S.spendView==="unp"}" data-spendview="unp">계획 외</button></div>`;
   const head=`<section class="card">
     <div class="row-between"><span class="muted small">${Number(S.month.slice(5))}월 변동비</span>${budget?`<span class="muted small num">예산 ${won(budget)}</span>`:""}</div>
     <div class="num" style="font-size:28px;font-weight:700;letter-spacing:-.03em">${won(c.varT)}</div>
     <div class="muted small">${S.expenses.length}건 기록 · 인센 <span class="num">${won(c.incenUsed)}</span> · 신한 <span class="num">${won(c.shinhanUsed)}</span></div>
   </section>`;
+  if(S.spendView==="unp"){
+    const u=unplannedStats(), arr=[...u.list].sort((a,b)=>(b.date||"").localeCompare(a.date||"")||(b.createdAt||0)-(a.createdAt||0));
+    return head+toggle+`<section class="card"><h2>계획 외 소비 <span class="num" style="color:var(--ink)">${won(u.total)}</span></h2>
+      <div class="muted small">${arr.length}건 · 변동비의 ${c.varT?Math.round(u.total/c.varT*100):0}%${u.prevTotal!=null?` · 지난달 ${won(u.prevTotal)}`:""}</div>
+      ${arr.length? `<div class="list">${arr.map(expRow).join("")}</div>` : `<div class="empty">계획 외로 표시한 지출이 없어요. 기록 창의 '🙅 계획 외 소비'를 켜면 여기에 모여요.</div>`}</section>`;
+  }
   if(S.spendView==="list"){
     const sorted=[...S.expenses].sort((a,b)=> (b.date||"").localeCompare(a.date||"") || (b.createdAt||0)-(a.createdAt||0));
     const groups={}; sorted.forEach(e=>(groups[e.date]=groups[e.date]||[]).push(e));
@@ -844,7 +857,7 @@ function vTodo(){
 // ---------- 시트(입력 폼) ----------
 const FORMS = {
   expense:{title:"지출", col:"expenses", fields:[
-    {k:"amount",l:"금액",t:"amount",req:1},{k:"method",l:"결제수단",t:"chips",opts:["인센","신한"]},{k:"category",l:"분류",t:"chips",opts:VAR_CATS,def:"식비"},{k:"sug",l:"자주 쓴 곳",t:"sug"},{k:"plan",l:"일정",t:"plan",def:""},
+    {k:"amount",l:"금액",t:"amount",req:1},{k:"method",l:"결제수단",t:"chips",opts:["인센","신한"]},{k:"category",l:"분류",t:"chips",opts:VAR_CATS,def:"식비"},{k:"sug",l:"자주 쓴 곳",t:"sug"},{k:"unplanned",l:"계획 외",t:"toggle"},{k:"plan",l:"일정",t:"plan",def:""},
     {k:"memo",l:"메모",t:"text",ph:"예: 점심, 친구 생일"},{k:"date",l:"날짜",t:"date"},
     {k:"reimb",l:"정산 받을 돈",t:"amount",hint:"내가 먼저 내고 돌려받을 금액. 인센 잔액은 결제 금액 전체로, 예산·분석은 내 몫만 계산해요."},{k:"reimbState",l:"정산 상태",t:"chips",opts:["받기 전","받음"],def:"받기 전"}]},
   income:{title:"수입", col:"income", fields:[
@@ -899,6 +912,7 @@ function openSheet(kind, id, preset){
     if(f.t==="plan"){ const ps=monthPlans(); if(!ps.length) return "";
       const opts=[["","없음"],...ps.map(p=>[p.id,p.name])];
       return `<div class="field"><span class="lbl">${f.l}</span><div class="quick" data-chips="${f.k}">${opts.map(([id,n])=>`<button type="button" class="chip" aria-pressed="${id===(val||"")}" data-val="${esc(id)}">${esc(n)}</button>`).join("")}</div></div>`; }
+    if(f.t==="toggle") return `<div class="field"><div class="quick"><button type="button" class="chip unp" id="f-unplanned" aria-pressed="${val===true}">🙅 계획 외 소비</button><span class="hint" style="align-self:center">야식·충동 구매처럼 계획에 없던 지출이면 켜기</span></div></div>`;
     if(f.t==="sug") return `<div class="field" id="sugBox" hidden><span class="lbl">${f.l} <span class="muted" style="font-weight:500">· 누르면 메모·결제수단 자동 입력</span></span><div class="quick" id="sugChips"></div></div>`;
     if(f.t==="chips") return `<div class="field"><span class="lbl">${f.l}</span><div class="quick" data-chips="${f.k}">${(kind==="expense"&&f.k==="category"? catOrder() : f.opts).map(o=>`<button type="button" class="chip" aria-pressed="${o===val}" data-val="${esc(o)}">${esc(o)}</button>`).join("")}</div></div>`;
     if(f.t==="amount") return `<div class="field"><label for="${id}">${f.l}</label><input id="${id}" class="amt" inputmode="numeric" autocomplete="off" placeholder="0" value="${val?Number(val).toLocaleString("ko-KR"):""}">${f.hint?`<span class="hint">${f.hint}</span>`:""}</div>`;
@@ -914,6 +928,14 @@ function openSheet(kind, id, preset){
   form.querySelectorAll("input.amt").forEach(inp=>inp.addEventListener("input",()=>{const n=amt(inp.value); inp.value=n?n.toLocaleString("ko-KR"):"";}));
   form.querySelectorAll("[data-chips]").forEach(g=>g.addEventListener("click",e=>{const b=e.target.closest(".chip"); if(!b) return; g.querySelectorAll(".chip").forEach(x=>x.setAttribute("aria-pressed",x===b)); if(kind==="expense"&&g.dataset.chips==="category") renderSug(form); }));
   if(kind==="expense") renderSug(form);
+  if(kind==="expense"){
+    const tg=form.querySelector("#f-unplanned"), memo=form.querySelector("#f-expense-memo"); let touched=!!id;
+    if(tg) tg.onclick=()=>{ touched=true; tg.setAttribute("aria-pressed", tg.getAttribute("aria-pressed")!=="true"); };
+    // 배달앱 + 밤 9시~새벽 4시 → 야식으로 보고 미리 켜둠 (직접 누르면 그 뒤로는 건드리지 않음)
+    const auto=()=>{ if(touched||!tg) return; const h=new Date().getHours(), late=h>=21||h<4;
+      tg.setAttribute("aria-pressed", String(late && /쿠팡이츠|배민|배달의민족|요기요|땡겨요/.test(memo?.value||""))); };
+    memo?.addEventListener("input",auto); form.querySelector("#sugChips")?.addEventListener("click",()=>setTimeout(auto,0));
+  }
   const first=form.querySelector("input"); if(first && !id) setTimeout(()=>first.focus(),60);
   const del=document.getElementById("delBtn");
   if(del) del.addEventListener("click",async()=>{
@@ -928,6 +950,7 @@ function openSheet(kind, id, preset){
     const out={};
     for(const f of F.fields){
       if(f.t==="sug") continue;
+      if(f.t==="toggle"){ out[f.k]=form.querySelector("#f-unplanned")?.getAttribute("aria-pressed")==="true"; continue; }
       if(f.t==="chips"||f.t==="plan"){ out[f.k]=form.querySelector(`[data-chips="${f.k}"] .chip[aria-pressed="true"]`)?.dataset.val ?? f.def; continue; }
       const el=document.getElementById("f-"+kind+"-"+f.k); let val=el.value.trim();
       if(f.t==="amount") val=amt(val); if(f.t==="number") val= val? Math.min(31,Math.max(1,Number(val)||1)) : null; if(f.t==="qty") val= val? Math.max(0,Number(val)||0) : 0;
@@ -1097,6 +1120,7 @@ document.addEventListener("click", async e=>{
   const rd=t.closest("[data-reimb-done]"); if(rd){ guard(()=>S.db.collection("expenses").doc(rd.dataset.reimbDone).update({reimbDone:true}),"정산 완료로 표시했어요"); return; }
   const tg=t.closest("[data-toggle]"); if(tg){ const td=S.todos.find(x=>x.id===tg.dataset.toggle); if(td) guard(()=>S.db.collection("todos").doc(td.id).update({done:!td.done, doneAt: td.done?null:Date.now()})); return; }
   const dd=t.closest("[data-day]"); if(dd){ S.selDay=dd.dataset.day; render(); document.querySelector(".cal")?.nextElementSibling?.scrollIntoView({behavior:"smooth",block:"nearest"}); return; }
+  if(t.closest("[data-unp-go]")){ S.spendView="unp"; setTab("spend"); return; }
   const sv=t.closest("[data-spendview]"); if(sv){ S.spendView=sv.dataset.spendview; try{localStorage.setItem("ledger.spendView",S.spendView);}catch(e){} render(); return; }
   const tv=t.closest("[data-todoview]"); if(tv){ S.todoView=tv.dataset.todoview; render(); return; }
   const act=t.closest("[data-act]")?.dataset.act;
