@@ -468,6 +468,7 @@ function render(){
   const fab=document.getElementById("fab"), fl=document.getElementById("fabLabel");
   const fabMap={home:"지출 기록",spend:"지출 기록",fixed:"고정비 추가",invest:"투자 추가",todo:"할 일 추가"};
   fl.textContent=fabMap[S.tab]; fab.hidden=!S.canWrite;
+  applyLinked();
   const c=calc();
   $view.innerHTML = ({home:vHome,spend:vSpend,fixed:vFixed,invest:vInvest,todo:vTodo})[S.tab](c);
 }
@@ -767,7 +768,7 @@ function vInvest(c){
         return `<button class="item" data-edit="invest" data-id="${x.id}">
         <span class="t">${esc(x.name)}</span>
         <span class="a num">${won(x.value)}${Number(x.qty)>0?`<small class="${g>0?"up":g<0?"dn":""}">${g>0?"+":""}${r.toFixed(1)}% · ${g>0?"+":""}${man(g)}</small>`:""}</span>
-        <span class="m">${x.qty?`${Number(x.qty).toLocaleString("ko-KR")}주 · `:""}${esc(x.account||"")}${x.monthly?` · 월 ${man(x.monthly)}`:""}${x.updated?` · ${x.updated.slice(5).replace("-","/")} 갱신`:""}</span></button>`;}).join("")}
+        <span class="m">${x.qty?`${Number(x.qty).toLocaleString("ko-KR")}주 · `:""}${esc(x.account||"")}${x.monthly?` · 월 ${man(x.monthly)}`:""}${x.link? ` · ${x.link}체크 결제만큼 자동 차감 (${new Date(x.baseAt).getMonth()+1}/${new Date(x.baseAt).getDate()} ${man(x.baseAmount)} 기준)` : x.updated?` · ${x.updated.slice(5).replace("-","/")} 갱신`:""}</span></button>`;}).join("")}
     </div></section>`;}).join("")}
   <section class="card"><h2>부채 <span class="num" style="color:var(--ink)">${man(c.debtT)}</span>${S.canWrite?`<button class="link" data-act="add-debt">＋ 추가</button>`:""}</h2>
     ${S.debts.length?`<div class="list">${S.debts.map(d=>{const e=estDebt(d), mo=monthsSince(d.asOf);
@@ -942,6 +943,7 @@ function openSheet(kind, id, preset){
     if(kind==="plan"){ out.month=(out.date||today()).slice(0,7); if(!out.endDate||out.endDate<out.date) out.endDate=""; }
     if(kind==="debt"){ out.asOf=today(); out.rate=String(out.rate||"").replace(/[^0-9.]/g,""); }
     if(kind==="invest"){ out.updated=today();
+      if(cur && cur.link){ out.baseAmount=out.value; out.baseAt=Date.now(); }
       if(out.qty>0 && out.avgPrice>0) out.principal=Math.round(out.qty*out.avgPrice);
       if(out.qty>0 && out.price>0){ out.value=Math.round(out.qty*out.price); out.account=String(out.account||"").replace(/\s*·\s*현재가 미입력/,""); } }
     if(kind==="budget"){ await guard(()=>S.db.doc("settings/main").set({...S.settings,...out}),"예산을 저장했어요"); closeSheet(); return; }
@@ -1204,6 +1206,18 @@ async function refreshLive(force){
   if(!["invest","home"].includes(S.tab)) return;
   liveBusy=true; try{ await sb.rpc("refresh_prices"); }catch(e){ console.error(e); } finally{ liveBusy=false; }
 }
+// ---------- 연결 통장: 설정한 잔액에서, 그 뒤에 기록한 신한(체크) 결제만큼 자동 차감 ----------
+function linkedSpent(x){ return sum(S.recent.filter(e=>e.method===x.link && (e.createdAt||0)>(x.baseAt||0)), e=>e.amount); }
+const linkSynced={};
+function applyLinked(){
+  for(const x of S.invest){ if(!x.link || x.baseAmount==null) continue;
+    const v=Math.round(x.baseAmount - linkedSpent(x));
+    if(v!==x.value){ x.value=v;
+      // 15:51 자동 작업·월별 기록도 같은 숫자를 보도록 저장 (같은 값은 한 번만)
+      if(S.canWrite && S.db && linkSynced[x.id]!==v){ linkSynced[x.id]=v; clearTimeout(applyLinked.t);
+        applyLinked.t=setTimeout(()=>S.db.collection("invest").doc(x.id).update({value:v}).catch(console.error),1200); } }
+  }
+}
 function subExpenses(){
   if(S.unsubExp) S.unsubExp();
   S.unsubExp = S.db.collection("expenses").where("month","==",S.month).onSnapshot(s=>{ S.expenses=docs(s).map(normCat); render(); }, onErr);
@@ -1297,7 +1311,7 @@ function start(){
   db.collection("investSnap").onSnapshot(live(s=>S.snaps=docs(s)), onErr);
   db.collection("debts").onSnapshot(live(s=>S.debts=docs(s)), onErr);
   db.collection("plans").onSnapshot(live(s=>S.plans=docs(s)), onErr);
-  db.collection("expenses").where("month",">=",shiftMonth(ym(new Date()),-2)).onSnapshot(s=>{ S.recent=docs(s).map(normCat); }, onErr);
+  db.collection("expenses").where("month",">=",shiftMonth(ym(new Date()),-2)).onSnapshot(s=>{ S.recent=docs(s).map(normCat); render(); }, onErr);
   db.collection("dcLog").onSnapshot(live(s=>S.dc=docs(s)), onErr);
   db.doc("settings/main").onSnapshot(live(s=>S.settings=s.exists? s.data() : {}), onErr);
   subExpenses();
