@@ -217,7 +217,8 @@ nav.tabs button[aria-current="page"]{color:var(--ink);font-weight:700}
 .sheet .actions{display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap;align-items:center}
 .sheet .actions .r{display:flex;gap:8px;margin-left:auto}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(144px + env(safe-area-inset-bottom,0px));z-index:30;background:var(--ink);color:var(--surface);padding:11px 18px;border-radius:999px;font-size:14px;font-weight:600;max-width:calc(100% - 32px)}
-.sheet{overscroll-behavior:contain;will-change:transform}
+.sheet{overscroll-behavior:contain;will-change:transform;overflow-x:hidden}
+.scrim{overscroll-behavior:none}
 .grab{flex:none;align-self:center;width:40px;height:5px;border-radius:3px;background:var(--line);margin:-12px 0 -6px;position:relative}
 .grab::before{content:"";position:absolute;inset:-14px -40px}
 @media (prefers-reduced-motion:no-preference){
@@ -1039,8 +1040,28 @@ function enableSwipe(sheet){
   };
   sheet.addEventListener("touchend",end); sheet.addEventListener("touchcancel",end);
 }
+// 시트가 열려 있는 동안 뒤 화면 고정 + 키보드가 올라와도 시트가 보이는 영역에 딱 맞게
+let lockY=null;
+function lockPage(){
+  if(lockY!==null) return; lockY=window.scrollY;
+  const b=document.body.style; b.position="fixed"; b.top=`-${lockY}px`; b.left="0"; b.right="0"; b.width="100%";
+}
+function unlockPage(){
+  if(lockY===null) return; const y=lockY; lockY=null;
+  const b=document.body.style; b.position=b.top=b.left=b.right=b.width="";
+  window.scrollTo(0,y);
+}
+function fitSheet(){
+  const sc=document.querySelector("#sheetHost .scrim"), vv=window.visualViewport; if(!sc) return;
+  if(vv){ sc.style.top=vv.offsetTop+"px"; sc.style.height=vv.height+"px"; sc.style.bottom="auto"; }
+  const sh=sc.querySelector(".sheet"); if(sh) sh.style.maxHeight=Math.round((vv?vv.height:innerHeight)*.92)+"px";
+}
+// 어두운 바깥 영역을 끌어도 뒤 화면이 움직이지 않게
+document.addEventListener("touchmove",e=>{ if(e.target.classList&&e.target.classList.contains("scrim")) e.preventDefault(); },{passive:false});
+if(window.visualViewport){ visualViewport.addEventListener("resize",fitSheet); visualViewport.addEventListener("scroll",fitSheet); }
 new MutationObserver(()=>{
-  const sh=document.querySelector("#sheetHost .sheet"); if(sh){ clearTimeout(closeTimer); enableSwipe(sh); }
+  const sh=document.querySelector("#sheetHost .sheet");
+  if(sh){ clearTimeout(closeTimer); enableSwipe(sh); lockPage(); fitSheet(); } else unlockPage();
 }).observe(document.getElementById("sheetHost"),{childList:true});
 
 async function guard(fn, okMsg){
