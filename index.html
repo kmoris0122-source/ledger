@@ -94,6 +94,7 @@ header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background
 .bars{display:flex;flex-direction:column;gap:11px}
 .bar{display:grid;grid-template-columns:84px 1fr auto;align-items:center;gap:12px;font-size:13.5px}
 .bar .track{height:6px;background:var(--sunk);border-radius:999px;overflow:hidden}
+.sc-track{display:block;height:8px;background:var(--sunk);border-radius:999px;overflow:hidden}.sc-track span{display:block;height:100%;background:var(--accent);border-radius:999px}
 .bar .track span{display:block;height:100%;background:var(--c-var);border-radius:999px}
 .bar .name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink-2)}
 .bar .num{font-weight:600;color:var(--ink-2)}
@@ -356,7 +357,7 @@ function planCalc(c){
   const daily=new Array(dim+1).fill(0), act=new Array(dim+1).fill(0);
   for(let d=1; d<=dim; d++) daily[d]=base/dim;
   plans.forEach(p=>{ const s=dayIn(p.date,m,dim), e=Math.max(s, dayIn(p.endDate||p.date,m,dim)); for(let d=s; d<=e; d++) daily[d]+=(Number(p.budget)||0)/(e-s+1); });
-  S.expenses.forEach(e=>{ const d=dayIn(e.date,m,dim); act[d]+=own(e); });
+  S.expenses.forEach(e=>{ if(e.selfcare) return; const d=dayIn(e.date,m,dim); act[d]+=own(e); });  // 나를 위한 소비는 지난달 아낀 돈이라 이번 달 예산 속도에서 제외
   const plannedCum=[0], actualCum=[0];
   for(let d=1; d<=dim; d++){ plannedCum[d]=plannedCum[d-1]+daily[d]; actualCum[d]=actualCum[d-1]+act[d]; }
   const byPlan={}; S.expenses.forEach(e=>{ if(e.plan) byPlan[e.plan]=(byPlan[e.plan]||0)+own(e); });
@@ -368,6 +369,26 @@ function planCalc(c){
 }
 
 // ---------- 한 줄 진단 ----------
+// 나를 위한 소비: 지난달 변동비 예산 − 지난달 실제(나를 위한 소비 제외) = 이번 달 쓸 수 있는 돈
+function selfCareStats(){
+  const budget=Number(S.settings.varBudget)||0, prevM=shiftMonth(S.month,-1);
+  const prev=S.recent.filter(e=>e.month===prevM);
+  if(!budget || !prev.length || prevM<"2026-11") return null;  // 11월 결산부터 시작 (12월에 첫 적용)
+  const prevVar=sum(prev.filter(e=>!e.selfcare),own), allow=Math.max(0,budget-prevVar);
+  const used=sum(S.expenses.filter(e=>e.selfcare),own);
+  return {prevM, prevVar, budget, allow, used, left:allow-used};
+}
+function vSelfCare(){
+  const s=selfCareStats(); if(!s) return "";
+  const pct=s.allow? Math.min(100,s.used/s.allow*100) : (s.used?100:0);
+  return `<section class="card">
+    <h2>🎁 나를 위한 소비 <span class="muted small">${Number(s.prevM.slice(5))}월에 아낀 돈</span></h2>
+    <div class="row-between"><span class="num" style="font-size:22px;font-weight:700;letter-spacing:-.02em;${s.left<0?"color:var(--up)":""}">${s.left<0?"−"+won(-s.left)+" 초과":won(s.left)+" 남음"}</span>
+      <span class="muted small num">${won(s.used)} / ${won(s.allow)}</span></div>
+    <span class="sc-track"><span style="width:${pct.toFixed(1)}%;${s.left<0?"background:var(--up)":""}"></span></span>
+    <div class="muted small">${s.allow? `${Number(s.prevM.slice(5))}월 변동비 ${man(s.prevVar)} / 예산 ${man(s.budget)} → 아낀 ${man(s.allow)}을 이번 달에 써도 돼요. 다 못 쓴 돈은 이월하지 않아요.` : `${Number(s.prevM.slice(5))}월에 예산을 다 써서 이번 달은 0원이에요. 이번 달 아끼면 다음 달에 생겨요.`}</div>
+  </section>`;
+}
 function unplannedStats(){
   const list=S.expenses.filter(e=>e.unplanned && !e.plan), prevM=shiftMonth(S.month,-1);
   const prev=S.recent.filter(e=>e.month===prevM && e.unplanned && !e.plan);
@@ -517,6 +538,7 @@ function vHome(c){
   </section>
 
   ${vIncen(c, isCur, remainDays)}
+  ${vSelfCare()}
   ${vReimb(c)}
   ${vAuto()}
 
@@ -670,7 +692,7 @@ function invSummary(c, showNet = true){
 function expRow(e){
   return `<button class="item" data-edit="expense" data-id="${e.id}">
     <span class="t">${esc(e.memo||e.category)}</span><span class="a num">${won(e.amount)}${Number(e.reimb)>0?`<small>내 몫 ${won(own(e))}</small>`:""}</span>
-    <span class="m"><span class="pill ${methodOf(e)==="인센"?"good":""}" style="padding:1px 7px;font-size:11px">${methodOf(e)}</span>${e.auto?` <span class="pill" style="padding:1px 7px;font-size:11px">자동</span>`:""}${e.unplanned?` <span class="pill warn" style="padding:1px 7px;font-size:11px">계획 외</span>`:""} ${esc(e.category)}${e.plan&&planName(e.plan)?` · <span style="color:var(--accent)">${esc(planName(e.plan))}</span>`:""}${Number(e.reimb)>0?` · 정산 ${man(e.reimb)} ${e.reimbDone?"받음":"받기 전"}`:""}</span></button>`;
+    <span class="m"><span class="pill ${methodOf(e)==="인센"?"good":""}" style="padding:1px 7px;font-size:11px">${methodOf(e)}</span>${e.auto?` <span class="pill" style="padding:1px 7px;font-size:11px">자동</span>`:""}${e.unplanned?` <span class="pill warn" style="padding:1px 7px;font-size:11px">계획 외</span>`:""}${e.selfcare?` <span class="pill" style="padding:1px 7px;font-size:11px;color:var(--accent)">나를 위한</span>`:""} ${esc(e.category)}${e.plan&&planName(e.plan)?` · <span style="color:var(--accent)">${esc(planName(e.plan))}</span>`:""}${Number(e.reimb)>0?` · 정산 ${man(e.reimb)} ${e.reimbDone?"받음":"받기 전"}`:""}</span></button>`;
 }
 function vSpend(c){
   const budget=Number(S.settings.varBudget)||0;
@@ -857,7 +879,7 @@ function vTodo(){
 // ---------- 시트(입력 폼) ----------
 const FORMS = {
   expense:{title:"지출", col:"expenses", fields:[
-    {k:"amount",l:"금액",t:"amount",req:1},{k:"method",l:"결제수단",t:"chips",opts:["인센","신한"]},{k:"category",l:"분류",t:"chips",opts:VAR_CATS,def:"식비"},{k:"sug",l:"자주 쓴 곳",t:"sug"},{k:"unplanned",l:"계획 외",t:"toggle"},{k:"plan",l:"일정",t:"plan",def:""},
+    {k:"amount",l:"금액",t:"amount",req:1},{k:"method",l:"결제수단",t:"chips",opts:["인센","신한"]},{k:"category",l:"분류",t:"chips",opts:VAR_CATS,def:"식비"},{k:"sug",l:"자주 쓴 곳",t:"sug"},{k:"unplanned",l:"계획 외",t:"toggle"},{k:"selfcare",l:"나를 위한",t:"toggle2"},{k:"plan",l:"일정",t:"plan",def:""},
     {k:"memo",l:"메모",t:"text",ph:"예: 점심, 친구 생일"},{k:"date",l:"날짜",t:"date"},
     {k:"reimb",l:"정산 받을 돈",t:"amount",hint:"내가 먼저 내고 돌려받을 금액. 인센 잔액은 결제 금액 전체로, 예산·분석은 내 몫만 계산해요."},{k:"reimbState",l:"정산 상태",t:"chips",opts:["받기 전","받음"],def:"받기 전"}]},
   income:{title:"수입", col:"income", fields:[
@@ -913,6 +935,7 @@ function openSheet(kind, id, preset){
       const opts=[["","없음"],...ps.map(p=>[p.id,p.name])];
       return `<div class="field"><span class="lbl">${f.l}</span><div class="quick" data-chips="${f.k}">${opts.map(([id,n])=>`<button type="button" class="chip" aria-pressed="${id===(val||"")}" data-val="${esc(id)}">${esc(n)}</button>`).join("")}</div></div>`; }
     if(f.t==="toggle") return `<div class="field"><div class="quick"><button type="button" class="chip unp" id="f-unplanned" aria-pressed="${val===true}">🙅 계획 외 소비</button><span class="hint" style="align-self:center">야식·충동 구매처럼 계획에 없던 지출이면 켜기</span></div></div>`;
+    if(f.t==="toggle2") return `<div class="field" style="margin-top:-8px"><div class="quick"><button type="button" class="chip" id="f-selfcare" aria-pressed="${val===true}">🎁 나를 위한 소비</button><span class="hint" style="align-self:center">옷·쇼핑 등 · 지난달 아낀 돈에서 써요</span></div></div>`;
     if(f.t==="sug") return `<div class="field" id="sugBox" hidden><span class="lbl">${f.l} <span class="muted" style="font-weight:500">· 누르면 메모·결제수단 자동 입력</span></span><div class="quick" id="sugChips"></div></div>`;
     if(f.t==="chips") return `<div class="field"><span class="lbl">${f.l}</span><div class="quick" data-chips="${f.k}">${(kind==="expense"&&f.k==="category"? catOrder() : f.opts).map(o=>`<button type="button" class="chip" aria-pressed="${o===val}" data-val="${esc(o)}">${esc(o)}</button>`).join("")}</div></div>`;
     if(f.t==="amount") return `<div class="field"><label for="${id}">${f.l}</label><input id="${id}" class="amt" inputmode="numeric" autocomplete="off" placeholder="0" value="${val?Number(val).toLocaleString("ko-KR"):""}">${f.hint?`<span class="hint">${f.hint}</span>`:""}</div>`;
@@ -930,7 +953,9 @@ function openSheet(kind, id, preset){
   if(kind==="expense") renderSug(form);
   if(kind==="expense"){
     const tg=form.querySelector("#f-unplanned"), memo=form.querySelector("#f-expense-memo"); let touched=!!id;
-    if(tg) tg.onclick=()=>{ touched=true; tg.setAttribute("aria-pressed", tg.getAttribute("aria-pressed")!=="true"); };
+    const sc=form.querySelector("#f-selfcare");
+    if(tg) tg.onclick=()=>{ touched=true; const on=tg.getAttribute("aria-pressed")!=="true"; tg.setAttribute("aria-pressed", on); if(on&&sc) sc.setAttribute("aria-pressed","false"); };
+    if(sc) sc.onclick=()=>{ touched=true; const on=sc.getAttribute("aria-pressed")!=="true"; sc.setAttribute("aria-pressed", on); if(on&&tg) tg.setAttribute("aria-pressed","false"); };
     // 배달앱 + 밤 9시~새벽 4시 → 야식으로 보고 미리 켜둠 (직접 누르면 그 뒤로는 건드리지 않음)
     const auto=()=>{ if(touched||!tg) return; const h=new Date().getHours(), late=h>=21||h<4;
       tg.setAttribute("aria-pressed", String(late && /쿠팡이츠|배민|배달의민족|요기요|땡겨요/.test(memo?.value||""))); };
@@ -950,6 +975,7 @@ function openSheet(kind, id, preset){
     const out={};
     for(const f of F.fields){
       if(f.t==="sug") continue;
+      if(f.t==="toggle2"){ out[f.k]=form.querySelector("#f-selfcare")?.getAttribute("aria-pressed")==="true"; continue; }
       if(f.t==="toggle"){ out[f.k]=form.querySelector("#f-unplanned")?.getAttribute("aria-pressed")==="true"; continue; }
       if(f.t==="chips"||f.t==="plan"){ out[f.k]=form.querySelector(`[data-chips="${f.k}"] .chip[aria-pressed="true"]`)?.dataset.val ?? f.def; continue; }
       const el=document.getElementById("f-"+kind+"-"+f.k); let val=el.value.trim();
