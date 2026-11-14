@@ -321,12 +321,16 @@ function toast(msg){ const h=document.getElementById("toastHost"); h.innerHTML=`
 function docs(snap){ return snap.docs.map(d=>({id:d.id, ...d.data()})); }
 // 결제수단: 예전 '[인센]' 메모 기록도 인센으로 인식
 function methodOf(e){ return e.method || (/^\s*\[인센\]/.test(e.memo||"")? "인센" : "신한"); }
+// 결제수단 표시 이름 (설정에서 바꿀 수 있음, 저장 값은 그대로 "인센"/"신한")
+function mL(m){ const s=S.settings||{}; return m==="인센"? (s.m1Name||"인센") : m==="신한"? (s.m2Name||"신한") : m; }
+function jo(w,a,b){ const c=String(w).charCodeAt(String(w).length-1); return (c>=0xAC00&&c<=0xD7A3&&(c-0xAC00)%28>0)? w+a : w+b; }
+function methodOpts(){ return incenLimit()? ["인센","신한"] : ["신한"]; }
 // 부채 추정 잔액: 기준일 이후 지난 달 수 × 월 상환액을 빼서 계산
 function monthsSince(d){ if(!d) return 0; const [y,m]=d.slice(0,7).split("-").map(Number), n=new Date(); return Math.max(0,(n.getFullYear()*12+n.getMonth()+1)-(y*12+m)); }
 function estDebt(d){ return Math.max(0,(Number(d.balance)||0)-(Number(d.monthlyPay)||0)*monthsSince(d.asOf)); }
 // 정산 받을 돈을 뺀 내 몫
 function own(e){ return Math.max(0,(Number(e.amount)||0)-(Number(e.reimb)||0)); }
-function incenLimit(){ const v=S.settings.incenMonthly; return (v===undefined||v===null||v==="")? 1000000 : Number(v)||0; }
+function incenLimit(){ const v=S.settings.incenMonthly; return (v===undefined||v===null||v==="")? 0 : Number(v)||0; }
 
 // ---------- 계산 ----------
 function calc(){
@@ -414,10 +418,10 @@ function insights(c, pc){
     const up=pc.upcomingLeft;
     if(avg>0){ const days=Math.floor(Math.max(c.incenLeft-up,0)/avg);
       out.push({tone: pc.dayNow+days>=pc.dim? "good":"warn", html: pc.dayNow+days>=pc.dim
-        ? `인센은 남은 일정 예산(${man(up)})까지 써도 월말까지 버틸 수 있어요`
+        ? `${jo(mL("인센"),"은","는")} 남은 일정 예산(${man(up)})까지 써도 월말까지 버틸 수 있어요`
         : c.incenLeft<=up
-          ? `남은 일정 예산(${man(up)})이 인센 잔액(${man(c.incenLeft)})보다 커요 · 일정 중 <b class="num">${man(up-c.incenLeft)}</b>은 신한으로 내게 돼요`
-          : `남은 일정 예산 ${man(up)}을 빼면, 인센은 평소 속도로 약 <b class="num">${days}일</b> 더 쓸 수 있어요`}); }
+          ? `남은 일정 예산(${man(up)})이 ${mL("인센")} 잔액(${man(c.incenLeft)})보다 커요 · 일정 중 <b class="num">${man(up-c.incenLeft)}</b>은 ${jo(mL("신한"),"으로","로")} 내게 돼요`
+          : `남은 일정 예산 ${man(up)}을 빼면, ${jo(mL("인센"),"은","는")} 평소 속도로 약 <b class="num">${days}일</b> 더 쓸 수 있어요`}); }
   }
   if(c.incomeT && c.varT>0) out.push({tone:"", html:`수입 대비 <b class="num">${Math.round((c.fixedT+c.varT)/c.incomeT*100)}%</b>를 썼어요 (고정비 포함)`});
   return out.slice(0,4);
@@ -567,15 +571,15 @@ function vIncen(c, isCur, remainDays){
   if(!c.incenLim) return "";
   const used=c.incenUsed/c.incenLim, left=c.incenLeft;
   const tone= left<=0? "bad" : used>.85? "warn" : "good";
-  const msg= left<=0? "다 썼어요 · 이제 직접 결제는 신한체크" : tone==="warn"? "거의 다 썼어요" : "사용 가능";
+  const msg= left<=0? "다 썼어요 · 이제 직접 결제는 "+mL("신한") : tone==="warn"? "거의 다 썼어요" : "사용 가능";
   return `<section class="card tappable" data-act="incen-detail" role="button" tabindex="0" aria-label="인센 사용 내역 보기">
-    <h2>이번 달 인센 잔액 <button class="link" data-act="budget">한도 수정</button></h2>
+    <h2>이번 달 ${mL("인센")} 잔액 <button class="link" data-act="budget">한도 수정</button></h2>
     <div class="row-between"><span class="num ${left<0?"neg":""}" style="font-size:26px;font-weight:700;letter-spacing:-.03em">${won(Math.max(left,0))}</span><span class="muted small num">${won(c.incenUsed)} 사용 / ${won(c.incenLim)}</span></div>
     <div class="meter ${tone==="good"?"":tone}"><span style="width:${Math.min(used*100,100).toFixed(1)}%"></span></div>
     <div class="row-between small"><span class="pill ${tone}">${msg}</span>
       ${isCur && remainDays>0 && left>0? `<span class="muted">남은 ${remainDays}일 · 하루 <b class="num">${won(left/remainDays)}</b></span>`:""}</div>
-    ${left<0? `<div class="small neg">한도보다 ${won(-left)} 더 기록됐어요. 신한으로 결제한 건이 인센으로 기록됐는지 확인해보세요.</div>`:""}
-    <div class="row-between small"><span class="muted">신한체크 변동비 <b class="num">${won(c.shinhanUsed)}</b></span><span class="more">어디에 썼나 보기 ›</span></div>
+    ${left<0? `<div class="small neg">한도보다 ${won(-left)} 더 기록됐어요. ${jo(mL("신한"),"으로","로")} 결제한 건이 ${jo(mL("인센"),"으로","로")} 기록됐는지 확인해보세요.</div>`:""}
+    <div class="row-between small"><span class="muted">${mL("신한")} 변동비 <b class="num">${won(c.shinhanUsed)}</b></span><span class="more">어디에 썼나 보기 ›</span></div>
   </section>`;
 }
 
@@ -644,12 +648,12 @@ function openPlanDetail(id){
       <div><span class="l">${left<0?"초과":"남음"}</span><span class="v num ${left<0?"neg":""}">${won(Math.abs(left))}</span></div>
     </div>
     <div class="meter ${r>1?"bad":r>.85?"warn":""}"><span style="width:${Math.min(r*100,100).toFixed(1)}%"></span></div>
-    ${list.length? `<div class="muted small">결제수단: 인센 ${won(inc)} · 신한 ${won(shin)}</div>`:""}
+    ${list.length? `<div class="muted small">결제수단: ${mL("인센")} ${won(inc)} · ${mL("신한")} ${won(shin)}</div>`:""}
     ${cats.length>1? `<div class="bars">${cats.map(([k,v])=>`<div class="bar"><span class="name">${esc(k)}</span><span class="track"><span style="width:${(v/max*100).toFixed(1)}%"></span></span><span class="num">${man(v)}</span></div>`).join("")}</div>`:""}
     ${list.length? `<div class="list">${list.map(e=>`<button class="item" data-edit="expense" data-id="${e.id}">
         <span class="t">${esc(e.memo||e.category)}</span>
         <span class="a num">${won(own(e))}${Number(e.reimb)>0?`<small>결제 ${won(e.amount)} · 정산 ${man(e.reimb)}</small>`:""}</span>
-        <span class="m"><span class="pill ${methodOf(e)==="인센"?"good":""}" style="padding:1px 7px;font-size:11px">${methodOf(e)}</span> ${esc(e.category||"")} · ${dLabel(e.date)}</span></button>`).join("")}</div>`
+        <span class="m"><span class="pill ${methodOf(e)==="인센"?"good":""}" style="padding:1px 7px;font-size:11px">${esc(mL(methodOf(e)))}</span> ${esc(e.category||"")} · ${dLabel(e.date)}</span></button>`).join("")}</div>`
     : `<div class="empty">아직 이 일정으로 기록된 지출이 없어요. 지출을 기록할 때 '일정'에서 ${esc(p.name)}을(를) 고르면 여기에 모여요.</div>`}
     <div class="actions">${S.canWrite?`<button type="button" class="btn" data-edit="plan" data-id="${p.id}">일정·예산 수정</button>`:""}<div class="r"><button type="button" class="btn ghost" data-close-btn>닫기</button></div></div>
   </div></div>`;
@@ -663,7 +667,7 @@ function openIncenDetail(){
   const cats=Object.entries(byCat).sort((a,b)=>b[1]-a[1]), max=cats[0]?.[1]||1;
   const groups={}; list.forEach(e=>(groups[e.date]=groups[e.date]||[]).push(e));
   document.getElementById("sheetHost").innerHTML=`<div class="scrim" data-close><div class="sheet" role="dialog" aria-modal="true" aria-label="인센 사용 내역">
-    <h3>${Number(S.month.slice(5))}월 인센 사용 내역</h3>
+    <h3>${Number(S.month.slice(5))}월 ${mL("인센")} 사용 내역</h3>
     <div class="invgrid">
       <div><span class="l">사용</span><span class="v num">${won(total)}</span></div>
       <div><span class="l">한도</span><span class="v num">${won(lim)}</span></div>
@@ -673,7 +677,7 @@ function openIncenDetail(){
     ${list.length? `<div class="list">${Object.entries(groups).map(([d,arr])=>`
       <div class="dayhead"><span>${dLabel(d)}</span><span class="num">${won(sum(arr,x=>x.amount))}</span></div>
       ${arr.map(e=>`<button class="item" data-edit="expense" data-id="${e.id}"><span class="t">${esc(e.memo||e.category)}</span><span class="a num">${won(e.amount)}</span><span class="m">${esc(e.category||"")}${e.plan&&planName(e.plan)?` · <span style="color:var(--accent)">${esc(planName(e.plan))}</span>`:""}</span></button>`).join("")}`).join("")}</div>`
-    : `<div class="empty">이번 달 인센으로 기록된 지출이 없어요.</div>`}
+    : `<div class="empty">이번 달 ${jo(mL("인센"),"으로","로")} 기록된 지출이 없어요.</div>`}
     <div class="actions"><span class="muted small">항목을 누르면 수정할 수 있어요</span><div class="r"><button type="button" class="btn ghost" data-close-btn>닫기</button></div></div>
   </div></div>`;
 }
@@ -692,7 +696,7 @@ function invSummary(c, showNet = true){
 function expRow(e){
   return `<button class="item" data-edit="expense" data-id="${e.id}">
     <span class="t">${esc(e.memo||e.category)}</span><span class="a num">${won(e.amount)}${Number(e.reimb)>0?`<small>내 몫 ${won(own(e))}</small>`:""}</span>
-    <span class="m"><span class="pill ${methodOf(e)==="인센"?"good":""}" style="padding:1px 7px;font-size:11px">${methodOf(e)}</span>${e.auto?` <span class="pill" style="padding:1px 7px;font-size:11px">자동</span>`:""}${e.unplanned?` <span class="pill warn" style="padding:1px 7px;font-size:11px">계획 외</span>`:""}${e.selfcare?` <span class="pill" style="padding:1px 7px;font-size:11px;color:var(--accent)">나를 위한</span>`:""} ${esc(e.category)}${e.plan&&planName(e.plan)?` · <span style="color:var(--accent)">${esc(planName(e.plan))}</span>`:""}${Number(e.reimb)>0?` · 정산 ${man(e.reimb)} ${e.reimbDone?"받음":"받기 전"}`:""}</span></button>`;
+    <span class="m"><span class="pill ${methodOf(e)==="인센"?"good":""}" style="padding:1px 7px;font-size:11px">${esc(mL(methodOf(e)))}</span>${e.auto?` <span class="pill" style="padding:1px 7px;font-size:11px">자동</span>`:""}${e.unplanned?` <span class="pill warn" style="padding:1px 7px;font-size:11px">계획 외</span>`:""}${e.selfcare?` <span class="pill" style="padding:1px 7px;font-size:11px;color:var(--accent)">나를 위한</span>`:""} ${esc(e.category)}${e.plan&&planName(e.plan)?` · <span style="color:var(--accent)">${esc(planName(e.plan))}</span>`:""}${Number(e.reimb)>0?` · 정산 ${man(e.reimb)} ${e.reimbDone?"받음":"받기 전"}`:""}</span></button>`;
 }
 function vSpend(c){
   const budget=Number(S.settings.varBudget)||0;
@@ -700,7 +704,7 @@ function vSpend(c){
   const head=`<section class="card">
     <div class="row-between"><span class="muted small">${Number(S.month.slice(5))}월 변동비</span>${budget?`<span class="muted small num">예산 ${won(budget)}</span>`:""}</div>
     <div class="num" style="font-size:28px;font-weight:700;letter-spacing:-.03em">${won(c.varT)}</div>
-    <div class="muted small">${S.expenses.length}건 기록 · 인센 <span class="num">${won(c.incenUsed)}</span> · 신한 <span class="num">${won(c.shinhanUsed)}</span></div>
+    <div class="muted small">${S.expenses.length}건 기록 · ${mL("인센")} <span class="num">${won(c.incenUsed)}</span> · ${mL("신한")} <span class="num">${won(c.shinhanUsed)}</span></div>
   </section>`;
   if(S.spendView==="unp"){
     const u=unplannedStats(), arr=[...u.list].sort((a,b)=>(b.date||"").localeCompare(a.date||"")||(b.createdAt||0)-(a.createdAt||0));
@@ -881,7 +885,7 @@ const FORMS = {
   expense:{title:"지출", col:"expenses", fields:[
     {k:"amount",l:"금액",t:"amount",req:1},{k:"method",l:"결제수단",t:"chips",opts:["인센","신한"]},{k:"category",l:"분류",t:"chips",opts:VAR_CATS,def:"식비"},{k:"sug",l:"자주 쓴 곳",t:"sug"},{k:"unplanned",l:"계획 외",t:"toggle"},{k:"selfcare",l:"나를 위한",t:"toggle2"},{k:"plan",l:"일정",t:"plan",def:""},
     {k:"memo",l:"메모",t:"text",ph:"예: 점심, 친구 생일"},{k:"date",l:"날짜",t:"date"},
-    {k:"reimb",l:"정산 받을 돈",t:"amount",hint:"내가 먼저 내고 돌려받을 금액. 인센 잔액은 결제 금액 전체로, 예산·분석은 내 몫만 계산해요."},{k:"reimbState",l:"정산 상태",t:"chips",opts:["받기 전","받음"],def:"받기 전"}]},
+    {k:"reimb",l:"정산 받을 돈",t:"amount",hint:"내가 먼저 내고 돌려받을 금액. 카드 잔액은 결제 금액 전체로, 예산·분석은 내 몫만 계산해요."},{k:"reimbState",l:"정산 상태",t:"chips",opts:["받기 전","받음"],def:"받기 전"}]},
   income:{title:"수입", col:"income", fields:[
     {k:"label",l:"항목",t:"text",ph:"급여(실수령)",req:1,def:"급여(실수령)"},{k:"amount",l:"금액",t:"amount",req:1},{k:"date",l:"입금일",t:"date"},{k:"note",l:"메모",t:"text",ph:"예: 야간 수당 포함"}]},
   fixed:{title:"고정 지출", col:"fixed", fields:[
@@ -907,8 +911,9 @@ const FORMS = {
     {k:"name",l:"항목",t:"text",ph:"예: 마이너스통장",req:1},{k:"balance",l:"현재 잔액",t:"amount",req:1,hint:"저장하는 날이 기준일이 돼요."},
     {k:"monthlyPay",l:"월 상환액",t:"amount",hint:"매달 자동으로 줄어드는 금액. 없으면 비워두세요."},
     {k:"rate",l:"금리(%)",t:"text",ph:"예: 4.8"},{k:"note",l:"메모",t:"text",ph:"예: 급여에서 원천공제"}]},
-  budget:{title:"예산·인센 설정", fields:[{k:"varBudget",l:"한 달 변동비 목표",t:"amount",hint:"식비·약속·쇼핑 등 고정비를 뺀 생활비 목표 (인센+신한 합계)"},
-    {k:"incenMonthly",l:"인센카드 월 한도",t:"amount",def:1000000,hint:"매달 충전되는 금액. 0으로 두면 잔액 카드를 숨겨요."}]},
+  budget:{title:"예산·결제수단 설정", fields:[{k:"varBudget",l:"한 달 변동비 목표",t:"amount",hint:"식비·약속·쇼핑 등 고정비를 뺀 생활비 목표 (모든 결제수단 합계)"},
+    {k:"incenMonthly",l:"충전식 카드 월 한도",t:"amount",def:0,hint:"회사 인센 카드처럼 매달 정해진 금액이 충전되는 카드. 없으면 0 → 관련 화면이 숨겨져요."},
+    {k:"m1Name",l:"충전식 카드 이름",t:"text",ph:"인센"},{k:"m2Name",l:"주 결제수단 이름",t:"text",ph:"신한",hint:"예: 체크카드, 토스카드"}]},
 };
 const listOf = {expense:()=>S.expenses,income:()=>S.income,fixed:()=>S.fixed,invest:()=>S.invest,todo:()=>S.todos,debt:()=>S.debts,plan:()=>S.plans,dc:()=>S.dc};
 
@@ -937,7 +942,7 @@ function openSheet(kind, id, preset){
     if(f.t==="toggle") return `<div class="field"><div class="quick"><button type="button" class="chip unp" id="f-unplanned" aria-pressed="${val===true}">🙅 계획 외 소비</button><span class="hint" style="align-self:center">야식·충동 구매처럼 계획에 없던 지출이면 켜기</span></div></div>`;
     if(f.t==="toggle2") return `<div class="field" style="margin-top:-8px"><div class="quick"><button type="button" class="chip" id="f-selfcare" aria-pressed="${val===true}">🎁 나를 위한 소비</button><span class="hint" style="align-self:center">옷·쇼핑 등 · 지난달 아낀 돈에서 써요</span></div></div>`;
     if(f.t==="sug") return `<div class="field" id="sugBox" hidden><span class="lbl">${f.l} <span class="muted" style="font-weight:500">· 누르면 메모·결제수단 자동 입력</span></span><div class="quick" id="sugChips"></div></div>`;
-    if(f.t==="chips") return `<div class="field"><span class="lbl">${f.l}</span><div class="quick" data-chips="${f.k}">${(kind==="expense"&&f.k==="category"? catOrder() : f.opts).map(o=>`<button type="button" class="chip" aria-pressed="${o===val}" data-val="${esc(o)}">${esc(o)}</button>`).join("")}</div></div>`;
+    if(f.t==="chips") return `<div class="field"><span class="lbl">${f.l}</span><div class="quick" data-chips="${f.k}">${(kind==="expense"&&f.k==="category"? catOrder() : kind==="expense"&&f.k==="method"? methodOpts() : f.opts).map(o=>`<button type="button" class="chip" aria-pressed="${o===val}" data-val="${esc(o)}">${esc(f.k==="method"? mL(o) : o)}</button>`).join("")}</div></div>`;
     if(f.t==="amount") return `<div class="field"><label for="${id}">${f.l}</label><input id="${id}" class="amt" inputmode="numeric" autocomplete="off" placeholder="0" value="${val?Number(val).toLocaleString("ko-KR"):""}">${f.hint?`<span class="hint">${f.hint}</span>`:""}</div>`;
     const type=(f.t==="number"||f.t==="qty")?"number":f.t==="date"?"date":"text";
     return `<div class="field"><label for="${id}">${f.l}</label><input id="${id}" type="${type}" ${f.t==="number"?'inputmode="numeric" min="1" max="31"':f.t==="qty"?'inputmode="decimal" min="0" step="any"':""} placeholder="${esc(f.ph||"")}" value="${esc(val)}">${f.hint?`<span class="hint">${f.hint}</span>`:""}</div>`;
