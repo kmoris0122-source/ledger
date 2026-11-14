@@ -1045,6 +1045,7 @@ let closeTimer=null;
 function closeSheet(){
   const host=document.getElementById("sheetHost"), scrim=host.querySelector(".scrim");
   if(!scrim || scrim.classList.contains("closing")) return;
+  if(sheetHist && !popClosing){ sheetHist=false; try{ history.back(); }catch(e){} }
   if(matchMedia("(prefers-reduced-motion: reduce)").matches){ host.innerHTML=""; return; }
   document.activeElement?.blur?.();
   const sh=scrim.querySelector(".sheet"); if(sh){ sh.style.animation="none"; void sh.offsetHeight; }
@@ -1115,9 +1116,14 @@ function fitSheet(){
 // 어두운 바깥 영역을 끌어도 뒤 화면이 움직이지 않게
 document.addEventListener("touchmove",e=>{ if(e.target.classList&&e.target.classList.contains("scrim")) e.preventDefault(); },{passive:false});
 if(window.visualViewport){ visualViewport.addEventListener("resize",fitSheet); visualViewport.addEventListener("scroll",fitSheet); }
+// 안드로이드 뒤로가기: 시트가 열리면 기록을 하나 쌓아두고, 뒤로가기를 누르면 앱이 꺼지는 대신 시트만 닫음
+let sheetHist=false, popClosing=false;
+window.addEventListener("popstate",()=>{ if(sheetHist){ sheetHist=false; popClosing=true; closeSheet(); popClosing=false; } });
 new MutationObserver(()=>{
   const sh=document.querySelector("#sheetHost .sheet");
-  if(sh){ clearTimeout(closeTimer); enableSwipe(sh); lockPage(); fitSheet(); } else unlockPage();
+  if(sh){ clearTimeout(closeTimer); enableSwipe(sh); lockPage(); fitSheet();
+    if(!sheetHist){ try{ history.pushState({sheet:1},""); sheetHist=true; }catch(e){} } }
+  else { unlockPage(); if(sheetHist && !popClosing){ sheetHist=false; try{ history.back(); }catch(e){} } }
 }).observe(document.getElementById("sheetHost"),{childList:true});
 
 async function guard(fn, okMsg){
@@ -1372,6 +1378,12 @@ function start(){
   subExpenses();
   db.live();
   setTimeout(refreshLive,1500); setInterval(refreshLive,60000);
+  // 홈 화면 아이콘 길게 누르기 → '지출 기록' 바로가기 (?add=expense)
+  if(new URLSearchParams(location.search).get("add")==="expense"){
+    try{ history.replaceState(null,"",location.pathname); }catch(e){}
+    const w=setInterval(()=>{ if(S.loaded){ clearInterval(w); if(S.canWrite) openSheet("expense"); } },150); setTimeout(()=>clearInterval(w),15000);
+  }
+  if("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(()=>{});
   document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible"){ db.refresh(); refreshLive(); } });
   sb.auth.onAuthStateChange((ev)=>{ if(ev==="SIGNED_OUT"){ location.reload(); } });
 }
