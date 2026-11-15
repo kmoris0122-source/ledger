@@ -244,6 +244,7 @@ html,body{touch-action:manipulation}
 @keyframes blink{50%{opacity:.25}}
 #login{position:fixed;inset:0;z-index:50;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:24px}
 #login[hidden],.flowbar[hidden]{display:none}
+.hint a{color:inherit;text-decoration:underline;text-underline-offset:2px}
 #login form{width:100%;max-width:360px;background:var(--surface);border-radius:24px;padding:28px 22px;display:flex;flex-direction:column;gap:14px}
 #login h1{margin:0 0 4px;font-size:24px;letter-spacing:-.03em}
 #login input{width:100%;font:inherit;font-size:16px;color:var(--ink);background:var(--sunk);border:1.5px solid transparent;border-radius:12px;padding:13px 14px}
@@ -586,6 +587,7 @@ function vIncen(c, isCur, remainDays){
 
 // ---------- DC 입금 기록 ----------
 function vDc(c){
+  if(!S.dc.length && !S.invest.some(x=>/DC/i.test(x.account||""))) return "";
   const m=S.month, y=m.slice(0,4);
   const mon=S.dc.filter(x=>x.month===m).sort((a,b)=>(a.date||"").localeCompare(b.date||""));
   const monT=sum(mon,x=>x.amount), yearT=sum(S.dc.filter(x=>(x.month||"").slice(0,4)===y),x=>x.amount);
@@ -649,7 +651,7 @@ function openPlanDetail(id){
       <div><span class="l">${left<0?"초과":"남음"}</span><span class="v num ${left<0?"neg":""}">${won(Math.abs(left))}</span></div>
     </div>
     <div class="meter ${r>1?"bad":r>.85?"warn":""}"><span style="width:${Math.min(r*100,100).toFixed(1)}%"></span></div>
-    ${list.length? `<div class="muted small">결제수단: ${mL("인센")} ${won(inc)} · ${mL("신한")} ${won(shin)}</div>`:""}
+    ${list.length && incenLimit()? `<div class="muted small">결제수단: ${mL("인센")} ${won(inc)} · ${mL("신한")} ${won(shin)}</div>`:""}
     ${cats.length>1? `<div class="bars">${cats.map(([k,v])=>`<div class="bar"><span class="name">${esc(k)}</span><span class="track"><span style="width:${(v/max*100).toFixed(1)}%"></span></span><span class="num">${man(v)}</span></div>`).join("")}</div>`:""}
     ${list.length? `<div class="list">${list.map(e=>`<button class="item" data-edit="expense" data-id="${e.id}">
         <span class="t">${esc(e.memo||e.category)}</span>
@@ -705,7 +707,7 @@ function vSpend(c){
   const head=`<section class="card">
     <div class="row-between"><span class="muted small">${Number(S.month.slice(5))}월 변동비</span>${budget?`<span class="muted small num">예산 ${won(budget)}</span>`:""}</div>
     <div class="num" style="font-size:28px;font-weight:700;letter-spacing:-.03em">${won(c.varT)}</div>
-    <div class="muted small">${S.expenses.length}건 기록 · ${mL("인센")} <span class="num">${won(c.incenUsed)}</span> · ${mL("신한")} <span class="num">${won(c.shinhanUsed)}</span></div>
+    <div class="muted small">${S.expenses.length}건 기록${incenLimit()? ` · ${mL("인센")} <span class="num">${won(c.incenUsed)}</span>`:""} · ${mL("신한")} <span class="num">${won(c.shinhanUsed)}</span></div>
   </section>`;
   if(S.spendView==="unp"){
     const u=unplannedStats(), arr=[...u.list].sort((a,b)=>(b.date||"").localeCompare(a.date||"")||(b.createdAt||0)-(a.createdAt||0));
@@ -896,6 +898,7 @@ const FORMS = {
   invest:{title:"투자 계좌", col:"invest", fields:[
     {k:"name",l:"이름",t:"text",ph:"예: 미국 S&P500 ETF",req:1},{k:"type",l:"유형",t:"chips",opts:INV_TYPES,def:"주식/ETF"},
     {k:"account",l:"계좌·기관",t:"text",ph:"예: 키움 ISA, 미래에셋 연금저축"},
+    {k:"code",l:"종목코드",t:"text",ph:"예: 005930",hint:"국내 주식·ETF 6자리 코드를 넣으면 현재가·평가액이 자동으로 바뀌어요 (장중 1분마다). 코드는 <a href=\"https://m.stock.naver.com/search\" target=\"_blank\" rel=\"noopener\">네이버 증권</a>에서 종목을 검색하면 이름 옆에 있어요. 해외 주식은 아직 자동 반영이 안 돼요."},
     {k:"qty",l:"보유 수량",t:"qty",ph:"주식·ETF만"},{k:"avgPrice",l:"평균 매입가",t:"amount"},{k:"price",l:"현재가",t:"amount",hint:"수량과 단가를 넣으면 원금·평가액이 자동 계산돼요. 보통은 현재가만 고치면 됩니다."},
     {k:"principal",l:"투자 원금(누적)",t:"amount"},{k:"value",l:"현재 평가액",t:"amount",hint:"수량이 없는 항목(보험·적금)만 직접 입력. 보험은 해지환급금 기준이 현실적이에요."},
     {k:"monthly",l:"월 납입액",t:"amount",hint:"매달 넣는 돈. 요약의 '투자 납입'에 들어가요."}]},
@@ -988,6 +991,11 @@ function openSheet(kind, id, preset){
       if(f.t==="amount") val=amt(val); if(f.t==="number") val= val? Math.min(31,Math.max(1,Number(val)||1)) : null; if(f.t==="qty") val= val? Math.max(0,Number(val)||0) : 0;
       if(f.req && (val===""||val===0)){ toast(`${f.l}을(를) 입력해주세요`); el.focus(); return; }
       out[f.k]=val;
+    }
+    if(kind==="invest" && "code" in out){
+      out.code=String(out.code||"").toUpperCase().replace(/\s/g,"");
+      if(out.code && !/^[0-9A-Z]{6}$/.test(out.code)){ toast("종목코드는 6자리예요 (예: 005930)"); document.getElementById("f-invest-code")?.focus(); return; }
+      if(out.code) setTimeout(()=>refreshLive(true),1200);
     }
     if(kind==="todo") out.prio=(PRIOS.find(p=>p[1]===out.prio)||PRIOS[1])[0];
     if(kind==="fixed") out.active = out.active!=="일시 중지";
@@ -1266,7 +1274,7 @@ async function refreshLive(force){
   if(liveBusy || !S.db || document.visibilityState!=="visible") return;
   if(!force && !marketOpen()) return;
   if(!["invest","home"].includes(S.tab)) return;
-  liveBusy=true; try{ await sb.rpc("refresh_prices"); }catch(e){ console.error(e); } finally{ liveBusy=false; }
+  liveBusy=true; try{ const r=await sb.rpc("refresh_prices"); if(force && r?.data?.skipped) setTimeout(()=>refreshLive(true),31000); }catch(e){ console.error(e); } finally{ liveBusy=false; }
 }
 // ---------- 연결 통장: 설정한 잔액에서, 그 뒤에 기록한 신한(체크) 결제만큼 자동 차감 ----------
 function linkedSpent(x){ return sum(S.recent.filter(e=>e.method===x.link && (e.createdAt||0)>(x.baseAt||0)), e=>e.amount); }
@@ -1378,7 +1386,7 @@ function start(){
   db.doc("settings/main").onSnapshot(live(s=>S.settings=s.exists? s.data() : {}), onErr);
   subExpenses();
   db.live();
-  setTimeout(refreshLive,1500); setInterval(refreshLive,60000);
+  setTimeout(()=>refreshLive(true),1500); setInterval(refreshLive,60000);
   // 홈 화면 아이콘 길게 누르기 → '지출 기록' 바로가기 (?add=expense)
   if(new URLSearchParams(location.search).get("add")==="expense"){
     try{ history.replaceState(null,"",location.pathname); }catch(e){}
