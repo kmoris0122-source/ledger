@@ -198,7 +198,8 @@ header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background
 .cd.sel{outline:2px solid var(--ink);outline-offset:-2px}
 .cd .marks{display:flex;gap:3px;position:absolute;bottom:4px}
 .mk{display:inline-block;width:5px;height:5px;border-radius:50%;vertical-align:middle}
-.mk.inc{background:var(--good)} .mk.plan{background:var(--warn)}
+.mk.inc{background:var(--good)} .mk.plan{background:var(--warn)} .mk.fix{background:var(--c-fixed)}
+.fxrow .t,.fxrow .a{color:var(--ink-2)} .fxsum{font-weight:500;color:var(--muted)}
 
 /* tab bar + fab */
 nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:6;background:var(--tab-bg);-webkit-backdrop-filter:saturate(180%) blur(20px);backdrop-filter:saturate(180%) blur(20px);
@@ -806,12 +807,24 @@ function vSpend(c){
   if(S.spendView==="list"){
     const sorted=[...S.expenses].sort((a,b)=> (b.date||"").localeCompare(a.date||"") || (b.createdAt||0)-(a.createdAt||0));
     const groups={}; sorted.forEach(e=>(groups[e.date]=groups[e.date]||[]).push(e));
+    const fxBy={}; monthFixed().forEach(f=>(fxBy[f.ds]=fxBy[f.ds]||[]).push(f));
+    const days=[...new Set([...Object.keys(groups),...Object.keys(fxBy)])].sort().reverse();
     return head+toggle+`<section class="card"><h2>기록</h2>
-      ${sorted.length? `<div class="list">${Object.entries(groups).map(([d,arr])=>`
-        <div class="dayhead"><span>${dLabel(d)}</span><span class="num">${won(sum(arr,own))}</span></div>${arr.map(expRow).join("")}`).join("")}</div>`
+      ${days.length? `<div class="list">${days.map(d=>{ const arr=groups[d]||[], fx=fxBy[d]||[];
+        return `<div class="dayhead"><span>${dLabel(d)}</span><span class="num">${arr.length?won(sum(arr,own)):""}${fx.length?`<small class="fxsum">${arr.length?" · ":""}고정 ${won(sum(fx,x=>x.amount))}</small>`:""}</span></div>${arr.map(expRow).join("")}${fx.map(fixedRow).join("")}`; }).join("")}</div>`
       : `<div class="empty">이 달에 기록된 지출이 없어요.</div>`}</section>`;
   }
   return head+toggle+vCalendar(c)+vDay(c);
+}
+// 이번 달 고정비 결제일 (31일 같은 날짜는 그 달 마지막 날로)
+function monthFixed(m=S.month){
+  const dim=daysInMonth(m);
+  return S.fixed.filter(f=>f.active!==false && Number(f.payDay)>0).map(f=>({...f, ds:`${m}-${String(Math.min(dim,Number(f.payDay))).padStart(2,"0")}`}));
+}
+function fixedRow(f){
+  const later=f.ds>today();
+  return `<button class="item fxrow" data-edit="fixed" data-id="${f.id}"><span class="t">${esc(f.name)}</span><span class="a num">${won(f.amount)}</span>
+    <span class="m"><span class="pill" style="padding:1px 7px;font-size:11px">고정비</span> ${esc(f.method||"")}${later?` · <span class="muted">예정</span>`:""}</span></button>`;
 }
 function incDate(i){ if(i.date) return i.date; const m=/^(\d{1,2})\/(\d{1,2})/.exec(i.note||""); return m? `${i.month.slice(0,4)}-${String(m[1]).padStart(2,"0")}-${String(m[2]).padStart(2,"0")}` : ""; }
 function selDay(){
@@ -823,6 +836,7 @@ function vCalendar(c){
   const byDay={}; S.expenses.forEach(e=>{ if((e.date||"").slice(0,7)===m) byDay[e.date]=(byDay[e.date]||0)+own(e); });
   const incDays=new Set(S.income.filter(i=>i.month===m).map(incDate).filter(Boolean));
   const planDays=new Set(); monthPlans().forEach(p=>{ const s=Number(p.date.slice(8)), e=p.endDate&&p.endDate.slice(0,7)===m? Number(p.endDate.slice(8)) : s; for(let d=s; d<=e; d++) planDays.add(`${m}-${String(d).padStart(2,"0")}`); });
+  const fxDays=new Set(monthFixed(m).map(f=>f.ds));
   const max=Math.max(1,...Object.values(byDay)), sel=selDay(), td=today();
   const cells=[]; for(let i=0;i<first;i++) cells.push(`<span class="cd empty-cell"></span>`);
   for(let d=1; d<=dim; d++){
@@ -830,12 +844,12 @@ function vCalendar(c){
     const heat= v? Math.max(.12, Math.min(1, v/max)) : 0;
     cells.push(`<button class="cd${ds===sel?" sel":""}${ds===td?" today":""}${dow===0?" sun":dow===6?" sat":""}" data-day="${ds}" aria-label="${mo}월 ${d}일 지출 ${won(v)}" style="--heat:${heat.toFixed(2)}">
       <span class="dn">${d}</span><span class="dv num">${v? short(v):""}</span>
-      <span class="marks">${incDays.has(ds)?`<i class="mk inc"></i>`:""}${planDays.has(ds)?`<i class="mk plan"></i>`:""}</span></button>`);
+      <span class="marks">${incDays.has(ds)?`<i class="mk inc"></i>`:""}${planDays.has(ds)?`<i class="mk plan"></i>`:""}${fxDays.has(ds)?`<i class="mk fix"></i>`:""}</span></button>`);
   }
   return `<section class="card cal">
     <div class="wk"><span class="sun">일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span class="sat">토</span></div>
     <div class="grid">${cells.join("")}</div>
-    <div class="row-between small muted"><span><i class="mk inc"></i> 수입 <i class="mk plan" style="margin-left:8px"></i> 일정</span><span>색이 진할수록 많이 쓴 날</span></div>
+    <div class="row-between small muted"><span><i class="mk inc"></i> 수입 <i class="mk plan" style="margin-left:8px"></i> 일정 <i class="mk fix" style="margin-left:8px"></i> 고정비</span><span>색이 진할수록 많이 쓴 날</span></div>
   </section>`;
 }
 function short(v){ return v>=10000? (Math.round(v/1000)/10).toLocaleString("ko-KR")+"만" : Math.round(v/1000)+"천"; }
@@ -843,7 +857,7 @@ function vDay(c){
   const d=selDay(), dayN=Number(d.slice(8));
   const ex=S.expenses.filter(e=>e.date===d).sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));
   const inc=S.income.filter(i=>i.month===S.month && incDate(i)===d);
-  const fx=S.fixed.filter(f=>f.active!==false && Number(f.payDay)===dayN);
+  const fx=monthFixed().filter(f=>f.ds===d);
   const pl=monthPlans().filter(p=>p.date<=d && (p.endDate||p.date)>=d);
   const exT=sum(ex,own), inT=sum(inc,x=>x.amount);
   return `<section class="card">
