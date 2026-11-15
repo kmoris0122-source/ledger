@@ -685,11 +685,44 @@ function openCatDetail(sel){
     <div class="actions"><span class="muted small">항목을 누르면 수정할 수 있어요</span><div class="r"><button type="button" class="btn ghost" data-close-btn>닫기</button></div></div>
   </div></div>`;
   renderCat(sel||"");
+  catSwipe(document.getElementById("catBody"));
 }
+// 내역 부분을 좌우로 밀면 이전/다음 카테고리로 (순서: 전체 → 많이 쓴 순)
+function catSwipe(body){
+  let x0=0,y0=0,t0=0,dx=0,mode=null;
+  const reduce=()=>matchMedia("(prefers-reduced-motion: reduce)").matches;
+  body.addEventListener("touchstart",e=>{ if(e.touches.length!==1) return; const p=e.touches[0]; x0=p.clientX; y0=p.clientY; t0=performance.now(); dx=0; mode=null; body.style.transition="none"; },{passive:true});
+  body.addEventListener("touchmove",e=>{
+    const p=e.touches[0], ddx=p.clientX-x0, ddy=p.clientY-y0;
+    if(!mode){ if(Math.abs(ddx)<8 && Math.abs(ddy)<8) return; mode= Math.abs(ddx)>Math.abs(ddy)*1.2? "h" : "v"; }
+    if(mode!=="h") return;
+    e.preventDefault(); dx=ddx;
+    const order=catOrderSel(), i=order.indexOf(renderCat.cur), edge=(dx>0&&i<=0)||(dx<0&&i>=order.length-1);
+    body.style.transform=`translateX(${edge? dx*.25 : dx}px)`; body.style.opacity=String(1-Math.min(.5,Math.abs(dx)/600));
+  },{passive:false});
+  const end=()=>{
+    if(mode!=="h"){ mode=null; return; } mode=null;
+    const order=catOrderSel(), i=order.indexOf(renderCat.cur), W=body.offsetWidth||320;
+    const fast=Math.abs(dx)>40 && performance.now()-t0<280, go=Math.abs(dx)>W*.25||fast;
+    const j= go? i+(dx<0?1:-1) : i;
+    if(j!==i && j>=0 && j<order.length){
+      const out=dx<0? -W : W;
+      body.style.transition= reduce()? "none" : "transform .16s ease-in, opacity .16s ease-in";
+      body.style.transform=`translateX(${out*.6}px)`; body.style.opacity="0";
+      setTimeout(()=>{ renderCat(order[j]); body.style.transition="none"; body.style.transform=`translateX(${-out*.4}px)`; void body.offsetWidth;
+        body.style.transition= reduce()? "none" : "transform .24s cubic-bezier(.22,1,.36,1), opacity .2s"; body.style.transform=""; body.style.opacity=""; }, reduce()?0:160);
+    } else {
+      body.style.transition="transform .22s cubic-bezier(.22,1,.36,1), opacity .2s"; body.style.transform=""; body.style.opacity="";
+    }
+  };
+  body.addEventListener("touchend",end); body.addEventListener("touchcancel",end);
+}
+function catOrderSel(){ return ["",...catData().cats.map(c=>c[0])]; }
 function renderCat(sel){
   const nav=document.getElementById("catNav"), body=document.getElementById("catBody"); if(!nav||!body) return;
   const {cats,total}=catData();
   if(sel && !cats.some(c=>c[0]===sel)) sel="";
+  renderCat.cur=sel;
   nav.innerHTML=[["",total,null],...cats].map(([k,v])=>`<button type="button" class="catchip" role="tab" aria-selected="${k===sel}" data-cat-sel="${esc(k)}"><span>${k?esc(k):"전체"}</span><b class="num">${man(v)}</b></button>`).join("");
   const on=nav.querySelector('[aria-selected="true"]');
   if(on) nav.scrollTo({left:Math.max(0,on.offsetLeft-(nav.clientWidth-on.offsetWidth)/2), behavior: matchMedia("(prefers-reduced-motion: reduce)").matches? "auto":"smooth"});
