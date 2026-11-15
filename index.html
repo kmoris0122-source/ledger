@@ -93,6 +93,15 @@ header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background
 .muted{color:var(--muted)} .small{font-size:13px}
 
 .bars{display:flex;flex-direction:column;gap:11px}
+.barbtn{border:0;background:none;padding:2px 0;margin:0;width:100%;text-align:left;font:inherit;color:inherit;cursor:pointer;border-radius:8px}
+.barbtn:active{opacity:.6}
+.catnav{display:flex;flex-shrink:0;gap:6px;overflow-x:auto;overflow-y:hidden;position:sticky;top:-22px;z-index:2;background:var(--surface);scrollbar-width:none;margin:-6px -2px 8px;padding:10px 2px 8px;box-shadow:0 8px 8px -8px rgba(0,0,0,.08);scroll-snap-type:x proximity;overscroll-behavior-x:contain}
+.catnav::-webkit-scrollbar{display:none}
+.catchip{flex:0 0 auto;display:flex;flex-direction:column;align-items:flex-start;gap:1px;border:0;border-radius:12px;padding:8px 12px;background:var(--sunk);color:var(--ink-2);font-size:13px;font-weight:500;scroll-snap-align:start}
+.catchip b{font-size:12px;font-weight:600;color:var(--muted)}
+.catchip[aria-selected="true"]{background:var(--ink);color:var(--surface)}
+.catchip[aria-selected="true"] b{color:var(--surface);opacity:.75}
+.catsheet .bars{margin:14px 0 10px}
 .bar{display:grid;grid-template-columns:84px 1fr auto;align-items:center;gap:12px;font-size:13.5px}
 .bar .track{height:6px;background:var(--sunk);border-radius:999px;overflow:hidden}
 .sc-track{display:block;height:8px;background:var(--sunk);border-radius:999px;overflow:hidden}.sc-track span{display:block;height:100%;background:var(--accent);border-radius:999px}
@@ -552,9 +561,9 @@ function vHome(c){
   ${vPlans(pc)}
 
   <section class="card">
-    <h2>어디에 썼나 <button class="link" data-tab-go="spend">전체 보기</button></h2>
+    <h2>어디에 썼나 ${cats.length?`<button class="link" data-act="cat-detail">자세히 보기</button>`:""}</h2>
     ${cats.length? `<div class="bars">${cats.map(([k,v])=>`
-      <div class="bar"><span class="name">${esc(k)}</span><span class="track"><span style="width:${(v/maxCat*100).toFixed(1)}%"></span></span><span class="num">${man(v)}</span></div>`).join("")}</div>`
+      <button type="button" class="bar barbtn" data-act="cat-detail" data-cat="${esc(k)}" aria-label="${esc(k)} 내역 보기"><span class="name">${esc(k)}</span><span class="track"><span style="width:${(v/maxCat*100).toFixed(1)}%"></span></span><span class="num">${man(v)}</span></button>`).join("")}</div>`
     : `<div class="empty">아직 기록된 지출이 없어요. 오른쪽 아래 <b>지출 기록</b> 버튼으로 금액과 분류만 남기면 됩니다.</div>`}
   </section>
 
@@ -660,6 +669,52 @@ function openPlanDetail(id){
     : `<div class="empty">아직 이 일정으로 기록된 지출이 없어요. 지출을 기록할 때 '일정'에서 ${esc(p.name)}을(를) 고르면 여기에 모여요.</div>`}
     <div class="actions">${S.canWrite?`<button type="button" class="btn" data-edit="plan" data-id="${p.id}">일정·예산 수정</button>`:""}<div class="r"><button type="button" class="btn ghost" data-close-btn>닫기</button></div></div>
   </div></div>`;
+}
+
+// ---------- 카테고리별 소비 시트: 위쪽 카테고리 칩, 고르면 그 카테고리 내역 ----------
+function catData(){
+  const byCat={}; S.expenses.forEach(e=>{ const k=e.category||"기타"; (byCat[k]=byCat[k]||[]).push(e); });
+  const cats=Object.entries(byCat).map(([k,arr])=>[k,sum(arr,own),arr]).filter(x=>x[1]>0||x[2].length).sort((a,b)=>b[1]-a[1]);
+  return {cats, total:sum(S.expenses,own)};
+}
+function openCatDetail(sel){
+  document.getElementById("sheetHost").innerHTML=`<div class="scrim" data-close><div class="sheet catsheet" role="dialog" aria-modal="true" aria-label="카테고리별 소비">
+    <h3>${Number(S.month.slice(5))}월 어디에 썼나</h3>
+    <div class="catnav" role="tablist" id="catNav"></div>
+    <div id="catBody"></div>
+    <div class="actions"><span class="muted small">항목을 누르면 수정할 수 있어요</span><div class="r"><button type="button" class="btn ghost" data-close-btn>닫기</button></div></div>
+  </div></div>`;
+  renderCat(sel||"");
+}
+function renderCat(sel){
+  const nav=document.getElementById("catNav"), body=document.getElementById("catBody"); if(!nav||!body) return;
+  const {cats,total}=catData();
+  if(sel && !cats.some(c=>c[0]===sel)) sel="";
+  nav.innerHTML=[["",total,null],...cats].map(([k,v])=>`<button type="button" class="catchip" role="tab" aria-selected="${k===sel}" data-cat-sel="${esc(k)}"><span>${k?esc(k):"전체"}</span><b class="num">${man(v)}</b></button>`).join("");
+  const on=nav.querySelector('[aria-selected="true"]');
+  if(on) nav.scrollTo({left:Math.max(0,on.offsetLeft-(nav.clientWidth-on.offsetWidth)/2), behavior: matchMedia("(prefers-reduced-motion: reduce)").matches? "auto":"smooth"});
+  const sh=nav.closest(".sheet"); if(sh && sh.scrollTop>nav.offsetTop) sh.scrollTo({top:nav.offsetTop});  // 내역이 길어 내려가 있었으면 칩 바로 아래부터 보이게
+  if(!cats.length){ body.innerHTML=`<div class="empty">이번 달 기록된 지출이 없어요.</div>`; return; }
+  if(!sel){
+    const max=cats[0][1]||1;
+    body.innerHTML=`<div class="invgrid"><div><span class="l">변동비 (내 몫)</span><span class="v num">${won(total)}</span></div><div><span class="l">카테고리</span><span class="v num">${cats.length}개</span></div><div><span class="l">기록</span><span class="v num">${S.expenses.length}건</span></div></div>
+      <div class="bars">${cats.map(([k,v,arr])=>`<button type="button" class="bar barbtn" data-cat-sel="${esc(k)}"><span class="name">${esc(k)}</span><span class="track"><span style="width:${(v/max*100).toFixed(1)}%"></span></span><span class="num">${man(v)} · ${total?Math.round(v/total*100):0}%</span></button>`).join("")}</div>
+      <div class="muted small">카테고리를 누르면 그 안의 내역을 볼 수 있어요.</div>`;
+    return;
+  }
+  const [k,v,arr]=cats.find(c=>c[0]===sel);
+  const list=[...arr].sort((a,b)=>(b.date||"").localeCompare(a.date||"")||(b.createdAt||0)-(a.createdAt||0));
+  const prevM=shiftMonth(S.month,-1), prevList=S.recent.filter(e=>e.month===prevM);
+  const prev= prevList.length? sum(prevList.filter(e=>(e.category||"기타")===k),own) : null;
+  const groups={}; list.forEach(e=>(groups[e.date]=groups[e.date]||[]).push(e));
+  const diff= prev==null? "" : v-prev;
+  body.innerHTML=`<div class="invgrid">
+      <div><span class="l">${esc(k)}</span><span class="v num">${won(v)}</span></div>
+      <div><span class="l">변동비 중</span><span class="v num">${total?Math.round(v/total*100):0}%</span></div>
+      <div><span class="l">${prev==null?"기록":"지난달"}</span><span class="v num">${prev==null? list.length+"건" : man(prev)}</span></div>
+    </div>
+    ${prev!=null? `<div class="muted small">${list.length}건 · 지난달보다 <b class="num ${diff>0?"neg":""}">${diff>0?"+":diff<0?"−":""}${won(Math.abs(diff))}</b></div>`:""}
+    <div class="list">${Object.entries(groups).map(([d,a])=>`<div class="dayhead"><span>${dLabel(d)}</span><span class="num">${won(sum(a,own))}</span></div>${a.map(expRow).join("")}`).join("")}</div>`;
 }
 
 // ---------- 인센 사용 내역 시트 ----------
@@ -1160,6 +1215,7 @@ document.addEventListener("click", async e=>{
   const tabBtn=t.closest("nav.tabs button"); if(tabBtn){ setTab(tabBtn.dataset.tab); return; }
   const go=t.closest("[data-tab-go]"); if(go){ setTab(go.dataset.tabGo); return; }
   const pd=t.closest("[data-plan-detail]"); if(pd){ openPlanDetail(pd.dataset.planDetail); return; }
+  const cs=t.closest("[data-cat-sel]"); if(cs){ renderCat(cs.dataset.catSel); return; }
   const ed=t.closest("[data-edit]"); if(ed){ openSheet(ed.dataset.edit, ed.dataset.id); return; }
   const ao=t.closest("[data-auto-ok]"); if(ao){ const id=ao.dataset.autoOk; const ids= id==="all"? S.expenses.filter(e=>e.auto&&!e.reviewed).map(e=>e.id) : [id];
     for(const x of ids) await guard(()=>S.db.collection("expenses").doc(x).update({reviewed:true})); toast(`${ids.length}건 확인했어요`); return; }
@@ -1177,6 +1233,7 @@ document.addEventListener("click", async e=>{
   if(act==="add-exp-day"){ openSheet("expense", null, {date:t.closest("[data-act]").dataset.date}); return; }
   if(act==="add-dc") openSheet("dc");
   if(act==="incen-detail") openIncenDetail();
+  if(act==="cat-detail"){ openCatDetail(t.closest("[data-act]").dataset.cat||""); return; }
   if(act==="fixed-suggest"){ const b=t.closest("[data-act]"); openSheet("fixed", null, {name:b.dataset.name, category:b.dataset.cat}); }
   if(act==="copy-income"){ const prev=S.income.filter(x=>x.month===shiftMonth(S.month,-1));
     for(const p of prev){ await guard(()=>S.db.collection("income").doc().set({label:p.label, amount:p.amount, note:p.note||"", month:S.month, createdAt:Date.now()})); }
