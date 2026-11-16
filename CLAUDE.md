@@ -8,6 +8,7 @@
 
 ## 데이터 읽고 쓰기
 `tools/db.py`로만 접근해요 (Supabase REST, 비밀 키는 네트워크 프록시가 `apikey` 헤더에 넣어줌 — 키 값을 찾거나 출력하지 않기).
+**이 DB에는 친구 계정 데이터도 있어요.** 사용자는 항상 본인 계정 기준으로 물어봐요. `db.py`는 모든 조회·수정에 본인 owner 조건을 붙이니, curl로 직접 부를 때도 반드시 `owner=eq.<OWNER>`를 넣으세요.
 
 ```
 python3 tools/db.py list <collection> [YYYY-MM]
