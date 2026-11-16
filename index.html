@@ -221,6 +221,7 @@ nav.tabs button[aria-current="page"]{color:var(--ink);font-weight:700}
   display:flex;flex-direction:column;gap:16px}
 .sheet h3{margin:0;font-size:21px;font-weight:700;letter-spacing:-.03em}
 .field{display:flex;flex-direction:column;gap:7px}
+.field[hidden]{display:none}
 .field>label,.field>.lbl{font-size:13px;font-weight:600;color:var(--muted)}
 .field input,.field select,.field textarea{width:100%;font:inherit;font-size:16px;color:var(--ink);background:var(--sunk);border:1.5px solid transparent;border-radius:12px;padding:12px 14px}
 .field input:focus{border-color:var(--accent);outline:none;background:var(--surface)}
@@ -817,6 +818,17 @@ function vSpend(c){
   return head+toggle+vCalendar(c)+vDay(c);
 }
 // 이번 달 고정비 결제일 (31일 같은 날짜는 그 달 마지막 날로)
+// 통장·현금은 원금/평가액 구분 없이 '잔액' 하나만
+function isCashType(t){ return t==="현금·포인트"; }
+function syncInvForm(form){
+  const t=form.querySelector('[data-chips="type"] .chip[aria-pressed="true"]')?.dataset.val, cash=isCashType(t);
+  ["code","qty","avgPrice","price","principal","monthly"].forEach(k=>{ const f=form.querySelector("#f-invest-"+k)?.closest(".field"); if(f) f.hidden=cash; });
+  const v=form.querySelector("#f-invest-value")?.closest(".field"); if(!v) return;
+  const lab=v.querySelector("label"), hint=v.querySelector(".hint");
+  if(!lab.dataset.orig){ lab.dataset.orig=lab.textContent; if(hint) hint.dataset.orig=hint.innerHTML; }
+  lab.textContent= cash? "현재 잔액" : lab.dataset.orig;
+  if(hint) hint.innerHTML= cash? (form.dataset.linked? "지금 통장에 있는 돈. 저장하면 이 금액부터 다시 체크카드 결제만큼 차감돼요." : "지금 통장에 있는 돈") : hint.dataset.orig;
+}
 function monthFixed(m=S.month){
   const dim=daysInMonth(m);
   return S.fixed.filter(f=>f.active!==false && Number(f.payDay)>0).map(f=>({...f, ds:`${m}-${String(Math.min(dim,Number(f.payDay))).padStart(2,"0")}`}));
@@ -1060,7 +1072,8 @@ function openSheet(kind, id, preset){
       <div class="r"><button type="button" class="btn ghost" data-close-btn>닫기</button>${readOnly?"":`<button type="submit" class="btn primary">저장</button>`}</div></div></form></div>`;
   const form=document.getElementById("sheetForm");
   form.querySelectorAll("input.amt").forEach(inp=>inp.addEventListener("input",()=>{const n=amt(inp.value); inp.value=n?n.toLocaleString("ko-KR"):"";}));
-  form.querySelectorAll("[data-chips]").forEach(g=>g.addEventListener("click",e=>{const b=e.target.closest(".chip"); if(!b) return; g.querySelectorAll(".chip").forEach(x=>x.setAttribute("aria-pressed",x===b)); if(kind==="expense"&&g.dataset.chips==="category") renderSug(form); }));
+  form.querySelectorAll("[data-chips]").forEach(g=>g.addEventListener("click",e=>{const b=e.target.closest(".chip"); if(!b) return; g.querySelectorAll(".chip").forEach(x=>x.setAttribute("aria-pressed",x===b)); if(kind==="expense"&&g.dataset.chips==="category") renderSug(form); if(kind==="invest") syncInvForm(form); }));
+  if(kind==="invest"){ if(cur?.link) form.dataset.linked="1"; syncInvForm(form); }
   if(kind==="expense") renderSug(form);
   if(kind==="expense"){
     const tg=form.querySelector("#f-unplanned"), memo=form.querySelector("#f-expense-memo"); let touched=!!id;
@@ -1107,6 +1120,7 @@ function openSheet(kind, id, preset){
     if(kind==="dc") out.month=(out.date||today()).slice(0,7);
     if(kind==="plan"){ out.month=(out.date||today()).slice(0,7); if(!out.endDate||out.endDate<out.date) out.endDate=""; }
     if(kind==="debt"){ out.asOf=today(); out.rate=String(out.rate||"").replace(/[^0-9.]/g,""); }
+    if(kind==="invest" && isCashType(out.type)){ out.principal=out.value; out.qty=0; out.avgPrice=0; out.price=0; delete out.code; }
     if(kind==="invest"){ out.updated=today();
       if(cur && cur.link){ out.baseAmount=out.value; out.baseAt=Date.now(); }
       if(out.qty>0 && out.avgPrice>0) out.principal=Math.round(out.qty*out.avgPrice);
