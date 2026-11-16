@@ -292,7 +292,7 @@ html,body{touch-action:manipulation}
 
 <div id="login" hidden><form id="loginForm" autocomplete="on">
   <h1>생활 장부</h1><div class="muted small">처음 한 번만 로그인하면 계속 유지돼요.</div>
-  <input id="lgEmail" type="email" autocomplete="username" placeholder="이메일" value="kmoris0122@gmail.com" required>
+  <input id="lgEmail" type="email" autocomplete="username" placeholder="이메일" required>
   <input id="lgPw" type="password" autocomplete="current-password" placeholder="비밀번호" required>
   <div class="err" id="lgErr"></div>
   <button type="submit">로그인</button>
@@ -1411,8 +1411,10 @@ function subExpenses(){
   S.unsubExp = S.db.collection("expenses").where("month","==",S.month).onSnapshot(s=>{ S.expenses=docs(s).map(normCat); render(); }, onErr);
 }
 // ---------- Supabase 저장소 (기존 앱의 db 인터페이스를 그대로 흉내) ----------
+// ▼ 이 앱을 따라 만들 때는 아래 두 줄만 내 Supabase 프로젝트 값(Project URL, Publishable key)으로 바꾸면 돼요.
 const SUPA_URL="https://cwyvuiwfrkelnmpmynzk.supabase.co";
 const SUPA_KEY="sb_publishable_QpH4subo3Wwt3evFWAJVmA_s5wgaoC3"; // 공개용 키 (보안은 로그인 + RLS)
+try{ const em=localStorage.getItem("ledger.email"); if(em) document.getElementById("lgEmail").value=em; }catch(e){}
 const sb = window.supabase.createClient(SUPA_URL, SUPA_KEY, { auth:{ persistSession:true, autoRefreshToken:true, storageKey:"ledger.auth" } });
 
 const SupaDB=(()=>{
@@ -1481,7 +1483,8 @@ function showLogin(){
   const f=document.getElementById("loginForm");
   f.onsubmit=async e=>{ e.preventDefault(); const err=document.getElementById("lgErr"); err.textContent="";
     const btn=f.querySelector("button"); btn.disabled=true; btn.textContent="확인 중…";
-    const {error}=await sb.auth.signInWithPassword({email:document.getElementById("lgEmail").value.trim(), password:document.getElementById("lgPw").value});
+    const em=document.getElementById("lgEmail").value.trim(); try{ localStorage.setItem("ledger.email",em); }catch(e){}
+    const {error}=await sb.auth.signInWithPassword({email:em, password:document.getElementById("lgPw").value});
     btn.disabled=false; btn.textContent="로그인";
     if(error){ err.textContent="이메일이나 비밀번호가 맞지 않아요."; return; }
     box.hidden=true; start(); };

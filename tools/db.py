@@ -8,9 +8,10 @@
   python3 db.py update <collection> <id> '<json>' [version] → 필드 병합. version 주면 그 버전일 때만(아니면 "conflict")
   python3 db.py delete <collection> <id>
 """
-import json, sys, urllib.request, urllib.parse
-B = "https://cwyvuiwfrkelnmpmynzk.supabase.co/rest/v1/docs"
-OWNER = "f4198aa1-1e1b-4bf2-afb8-6ec0fa077e6b"
+import json, os, sys, urllib.request, urllib.parse
+# 따라 만들 때는 환경 변수 LEDGER_URL(프로젝트 주소)과 LEDGER_OWNER(내 사용자 UUID)를 지정하세요.
+B = os.environ.get("LEDGER_URL", "https://cwyvuiwfrkelnmpmynzk.supabase.co") + "/rest/v1/docs"
+OWNER = os.environ.get("LEDGER_OWNER", "f4198aa1-1e1b-4bf2-afb8-6ec0fa077e6b")
 H = {"apikey": "proxy-injected", "Content-Type": "application/json"}
 
 def req(method, qs="", body=None, prefer=None):
