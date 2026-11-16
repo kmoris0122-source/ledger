@@ -9,6 +9,7 @@
   python3 db.py delete <collection> <id>
 """
 import json, os, sys, urllib.request, urllib.parse
+# 비밀 키는 모든 계정의 데이터를 볼 수 있어서, 모든 읽기·수정·삭제에 owner(내 계정) 조건을 반드시 붙여요.
 # 따라 만들 때는 환경 변수 LEDGER_URL(프로젝트 주소)과 LEDGER_OWNER(내 사용자 UUID)를 지정하세요.
 B = os.environ.get("LEDGER_URL", "https://cwyvuiwfrkelnmpmynzk.supabase.co") + "/rest/v1/docs"
 OWNER = os.environ.get("LEDGER_OWNER", "f4198aa1-1e1b-4bf2-afb8-6ec0fa077e6b")
@@ -28,11 +29,11 @@ q = lambda **kw: "?" + urllib.parse.urlencode(kw, safe=",.*()>-")
 def main(a):
     cmd, col = a[0], a[1]
     if cmd == "list":
-        kw = {"collection": f"eq.{col}", "select": "id,version,data", "order": "id"}
+        kw = {"owner": f"eq.{OWNER}", "collection": f"eq.{col}", "select": "id,version,data", "order": "id"}
         if len(a) > 2: kw["data->>month"] = f"eq.{a[2]}"
         return req("GET", q(**kw))
     _id = a[2]
-    key = {"collection": f"eq.{col}", "id": f"eq.{_id}"}
+    key = {"owner": f"eq.{OWNER}", "collection": f"eq.{col}", "id": f"eq.{_id}"}
     if cmd == "get":
         r = req("GET", q(**key, select="id,version,data")); return r[0] if r else None
     if cmd == "delete":
