@@ -54,6 +54,7 @@ def main(out, month=None):
     if sh:
         recent = ex + L("expenses", pm)
         sh_bal = (sh.get("baseAmount") or 0) - sum(e["amount"] for e in recent if method(e) == sh["link"] and (e.get("createdAt") or 0) > (sh.get("baseAt") or 0))
+        sh_bal += sum(i.get("amount") or 0 for i in L("income") if i.get("deposit") == sh["id"] and (i.get("createdAt") or 0) > (sh.get("baseAt") or 0))
     toss = next((x for x in inv if x.get("account") == "토스뱅크"), None)
 
     os.makedirs(out, exist_ok=True)

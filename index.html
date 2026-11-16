@@ -894,7 +894,7 @@ function vFixed(c){
   <section class="card">
     <h2>${Number(S.month.slice(5))}월 수입 <button class="link" data-act="add-income">＋ 추가</button></h2>
     ${c.inc.length? `<div class="list">${c.inc.map(i=>`<button class="item" data-edit="income" data-id="${i.id}">
-      <span class="t">${esc(i.label)}</span><span class="a num">${won(i.amount)}</span><span class="m">${esc(i.note||"")}</span></button>`).join("")}</div>
+      <span class="t">${esc(i.label)}</span><span class="a num">${won(i.amount)}</span><span class="m">${esc(i.note||"")}${i.deposit? `${i.note?" · ":""}<span style="color:var(--accent)">→ ${esc((S.invest.find(x=>x.id===i.deposit)||{}).name||"통장")}</span>`:""}</span></button>`).join("")}</div>
       <div class="row-between"><b>합계</b><b class="num">${won(c.incomeT)}</b></div>`
     : `<div class="empty">급여(실수령액)와 부수입을 적어주세요.${prev.length && S.canWrite? `<div><button class="btn sm" data-act="copy-income">지난달 수입 ${prev.length}건 불러오기</button></div>`:""}</div>`}
   </section>
@@ -924,7 +924,7 @@ function vInvest(c){
         return `<button class="item" data-edit="invest" data-id="${x.id}">
         <span class="t">${esc(x.name)}</span>
         <span class="a num">${won(x.value)}${Number(x.qty)>0?`<small class="${g>0?"up":g<0?"dn":""}">${g>0?"+":""}${r.toFixed(1)}% · ${g>0?"+":""}${man(g)}</small>`:""}</span>
-        <span class="m">${x.qty?`${Number(x.qty).toLocaleString("ko-KR")}주 · `:""}${esc(x.account||"")}${x.monthly?` · 월 ${man(x.monthly)}`:""}${x.link? ` · ${x.link}체크 결제만큼 자동 차감 (${new Date(x.baseAt).getMonth()+1}/${new Date(x.baseAt).getDate()} ${man(x.baseAmount)} 기준)` : x.updated?` · ${x.updated.slice(5).replace("-","/")} 갱신`:""}</span></button>`;}).join("")}
+        <span class="m">${x.qty?`${Number(x.qty).toLocaleString("ko-KR")}주 · `:""}${esc(x.account||"")}${x.monthly?` · 월 ${man(x.monthly)}`:""}${x.link? ` · ${x.link}체크 결제는 빼고, 통장으로 고른 수입은 더해요 (${new Date(x.baseAt).getMonth()+1}/${new Date(x.baseAt).getDate()} ${man(x.baseAmount)} 기준)` : x.updated?` · ${x.updated.slice(5).replace("-","/")} 갱신`:""}</span></button>`;}).join("")}
     </div></section>`;}).join("")}
   <section class="card"><h2>부채 <span class="num" style="color:var(--ink)">${man(c.debtT)}</span>${S.canWrite?`<button class="link" data-act="add-debt">＋ 추가</button>`:""}</h2>
     ${S.debts.length?`<div class="list">${S.debts.map(d=>{const e=estDebt(d), mo=monthsSince(d.asOf);
@@ -1004,7 +1004,7 @@ const FORMS = {
     {k:"memo",l:"메모",t:"text",ph:"예: 점심, 친구 생일"},{k:"date",l:"날짜",t:"date"},
     {k:"reimb",l:"정산 받을 돈",t:"amount",hint:"내가 먼저 내고 돌려받을 금액. 카드 잔액은 결제 금액 전체로, 예산·분석은 내 몫만 계산해요."},{k:"reimbState",l:"정산 상태",t:"chips",opts:["받기 전","받음"],def:"받기 전"}]},
   income:{title:"수입", col:"income", fields:[
-    {k:"label",l:"항목",t:"text",ph:"급여(실수령)",req:1,def:"급여(실수령)"},{k:"amount",l:"금액",t:"amount",req:1},{k:"date",l:"입금일",t:"date"},{k:"note",l:"메모",t:"text",ph:"예: 야간 수당 포함"}]},
+    {k:"label",l:"항목",t:"text",ph:"급여(실수령)",req:1,def:"급여(실수령)"},{k:"amount",l:"금액",t:"amount",req:1},{k:"date",l:"입금일",t:"date"},{k:"deposit",l:"통장 잔액에 더하기",t:"chips",opts:[],def:"",hint:"고르면 그 통장 잔액이 이 금액만큼 늘어나요. 급여처럼 잔액을 따로 맞추는 돈은 '안 함'"},{k:"note",l:"메모",t:"text",ph:"예: 야간 수당 포함"}]},
   fixed:{title:"고정 지출", col:"fixed", fields:[
     {k:"name",l:"항목",t:"text",ph:"통신비",req:1},{k:"amount",l:"월 금액",t:"amount",req:1},{k:"category",l:"분류",t:"chips",opts:FIXED_CATS,def:"기타"},
     {k:"payDay",l:"결제일",t:"number",ph:"25",hint:"매달 빠져나가는 날 (1~31)"},{k:"method",l:"결제 수단",t:"text",ph:"예: 신한카드, 자동이체"},
@@ -1060,6 +1060,8 @@ function openSheet(kind, id, preset){
     if(f.t==="toggle") return `<div class="field"><div class="quick"><button type="button" class="chip unp" id="f-unplanned" aria-pressed="${val===true}">🙅 계획 외 소비</button><span class="hint" style="align-self:center">야식·충동 구매처럼 계획에 없던 지출이면 켜기</span></div></div>`;
     if(f.t==="toggle2") return `<div class="field" style="margin-top:-8px"><div class="quick"><button type="button" class="chip" id="f-selfcare" aria-pressed="${val===true}">🎁 나를 위한 소비</button><span class="hint" style="align-self:center">옷·쇼핑 등 · 지난달 아낀 돈에서 써요</span></div></div>`;
     if(f.t==="sug") return `<div class="field" id="sugBox" hidden><span class="lbl">${f.l} <span class="muted" style="font-weight:500">· 누르면 메모·결제수단 자동 입력</span></span><div class="quick" id="sugChips"></div></div>`;
+    if(f.t==="chips" && f.k==="deposit"){ const accs=S.invest.filter(x=>x.link); if(!accs.length) return "";
+      return `<div class="field"><span class="lbl">${f.l}</span><div class="quick" data-chips="deposit">${[["","안 함"],...accs.map(x=>[x.id,x.name])].map(([id,n])=>`<button type="button" class="chip" aria-pressed="${id===(val||"")}" data-val="${esc(id)}">${esc(n)}</button>`).join("")}</div>${f.hint?`<span class="hint">${f.hint}</span>`:""}</div>`; }
     if(f.t==="chips") return `<div class="field"><span class="lbl">${f.l}</span><div class="quick" data-chips="${f.k}">${(kind==="expense"&&f.k==="category"? catOrder() : kind==="expense"&&f.k==="method"? methodOpts() : f.opts).map(o=>`<button type="button" class="chip" aria-pressed="${o===val}" data-val="${esc(o)}">${esc(f.k==="method"? mL(o) : o)}</button>`).join("")}</div></div>`;
     if(f.t==="amount") return `<div class="field"><label for="${id}">${f.l}</label><input id="${id}" class="amt" inputmode="numeric" autocomplete="off" placeholder="0" value="${val?Number(val).toLocaleString("ko-KR"):""}">${f.hint?`<span class="hint">${f.hint}</span>`:""}</div>`;
     const type=(f.t==="number"||f.t==="qty")?"number":f.t==="date"?"date":"text";
@@ -1396,10 +1398,12 @@ async function refreshLive(force){
 }
 // ---------- 연결 통장: 설정한 잔액에서, 그 뒤에 기록한 신한(체크) 결제만큼 자동 차감 ----------
 function linkedSpent(x){ return sum(S.recent.filter(e=>e.method===x.link && (e.createdAt||0)>(x.baseAt||0)), e=>e.amount); }
+// 수입 기록에서 '통장 잔액에 더하기'로 이 통장을 고른 돈 (기준 시각 이후 기록만)
+function linkedIn(x){ return sum(S.income.filter(i=>i.deposit===x.id && (i.createdAt||0)>(x.baseAt||0)), i=>i.amount); }
 const linkSynced={};
 function applyLinked(){
   for(const x of S.invest){ if(!x.link || x.baseAmount==null) continue;
-    const v=Math.round(x.baseAmount - linkedSpent(x));
+    const v=Math.round(x.baseAmount - linkedSpent(x) + linkedIn(x));
     if(v!==x.value){ x.value=v;
       // 15:51 자동 작업·월별 기록도 같은 숫자를 보도록 저장 (같은 값은 한 번만)
       if(S.canWrite && S.db && linkSynced[x.id]!==v){ linkSynced[x.id]=v; clearTimeout(applyLinked.t);
