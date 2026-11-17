@@ -55,6 +55,18 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding-block:14px 8px;
   display:flex;align-items:center;justify-content:space-between;gap:8px}
 .brand{font-size:20px;font-weight:700;letter-spacing:-.03em}
+.brandrow{display:flex;align-items:center;gap:4px}
+.gear{border:0;background:none;color:var(--muted);width:34px;height:34px;border-radius:999px;display:grid;place-items:center;padding:0}
+.gear:hover,.gear:active{background:var(--sunk);color:var(--ink)}
+.setlist .item{grid-template-columns:1fr}
+.filepick{display:flex;align-items:center;justify-content:center;border:1.5px dashed var(--line);border-radius:14px;padding:22px;font-weight:600;color:var(--accent);cursor:pointer}
+.filepick input{position:absolute;opacity:0;width:1px;height:1px}
+.impfile{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.impfile .link{margin-left:auto;background:var(--sunk);border:0;border-radius:999px;padding:5px 10px;font-size:12.5px;font-weight:600;color:var(--ink-2)}
+.impsec summary{cursor:pointer;font-weight:600;font-size:14px;padding:4px 0}
+.impgrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:8px 10px;align-items:center;margin-top:8px;font-size:13.5px}
+.impgrid label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink-2)}
+.impgrid select{width:100%;font:inherit;font-size:14px;color:var(--ink);background:var(--sunk);border:0;border-radius:10px;padding:8px 10px}
+.btn.danger{color:var(--c-over)}
 .monthnav{display:flex;align-items:center;gap:0;background:var(--surface);border-radius:999px;padding:2px;box-shadow:var(--shadow)}
 .monthnav button{background:none;border:0;width:34px;height:34px;border-radius:999px;font-size:17px;color:var(--muted)}
 .monthnav button:hover{background:var(--sunk);color:var(--ink)}
@@ -266,7 +278,7 @@ html,body{touch-action:manipulation}
 
 <div class="wrap">
   <header class="top">
-    <div class="brand">생활 장부</div>
+    <div class="brandrow"><div class="brand">생활 장부</div><button class="gear" data-act="settings" aria-label="설정"><svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg></button></div>
     <div class="monthnav">
       <button id="prevM" aria-label="이전 달">‹</button>
       <div class="m" id="monthLabel">—</div>
@@ -671,6 +683,208 @@ function openPlanDetail(id){
     : `<div class="empty">아직 이 일정으로 기록된 지출이 없어요. 지출을 기록할 때 '일정'에서 ${esc(p.name)}을(를) 고르면 여기에 모여요.</div>`}
     <div class="actions">${S.canWrite?`<button type="button" class="btn" data-edit="plan" data-id="${p.id}">일정·예산 수정</button>`:""}<div class="r"><button type="button" class="btn ghost" data-close-btn>닫기</button></div></div>
   </div></div>`;
+}
+
+// ---------- 설정 시트 ----------
+function openSettings(){
+  document.getElementById("sheetHost").innerHTML=`<div class="scrim" data-close><div class="sheet" role="dialog" aria-modal="true" aria-label="설정">
+    <h3>설정</h3>
+    <div class="list setlist">
+      <button class="item" data-act="budget"><span class="t">예산·결제수단</span><span class="m">한 달 변동비 목표, 카드 이름, 충전식 카드 한도</span></button>
+      <button class="item" data-act="import"><span class="t">다른 가계부 기록 가져오기</span><span class="m">뱅크샐러드·편한가계부·위플 등에서 내보낸 CSV·엑셀 파일</span></button>
+      <button class="item" data-act="logout"><span class="t">로그아웃</span><span class="m">이 기기에서 로그아웃해요</span></button>
+    </div>
+    <div class="actions"><span class="muted small">생활 장부</span><div class="r"><button type="button" class="btn ghost" data-close-btn>닫기</button></div></div>
+  </div></div>`;
+}
+
+// ---------- 다른 가계부 기록 가져오기 ----------
+const IMP={rows:null, head:null, map:null, catMap:{}, method:"신한", name:""};
+const IMP_FIELDS=[
+  ["date","날짜",true,/^(거래)?(일자|날짜|일시|날짜및시간|date)|거래일|사용일|결제일/i],
+  ["amount","금액",true,/^(거래)?금액|^amount|지출금액|사용금액|출금/i],
+  ["inAmount","수입 금액 (따로 있을 때)",false,/수입금액|입금|^수입$/i],
+  ["type","수입/지출 구분",false,/구분|타입|유형|type|수입\/지출|입출/i],
+  ["category","분류",false,/^(대)?분류|카테고리|category|항목/i],
+  ["memo","내용",false,/내역|내용|사용처|가맹점|거래처|적요|memo|description|상호/i],
+  ["memo2","메모",false,/^메모|^비고|note/i],
+];
+const SKIP="__skip";
+function openImport(){
+  IMP.rows=null;
+  document.getElementById("sheetHost").innerHTML=`<div class="scrim" data-close><div class="sheet" role="dialog" aria-modal="true" aria-label="다른 가계부 기록 가져오기">
+    <h3>다른 가계부 기록 가져오기</h3>
+    <div id="impBody"></div>
+    <div class="actions"><span class="muted small" id="impHint"></span><div class="r"><button type="button" class="btn ghost" data-close-btn>닫기</button><button type="button" class="btn primary" id="impGo" hidden>가져오기</button></div></div>
+  </div></div>`;
+  impStart();
+}
+function impStart(){
+  const b=document.getElementById("impBody"); if(!b) return;
+  b.innerHTML=`<div class="muted small" style="line-height:1.6">쓰던 가계부 앱에서 <b>내보내기(CSV·엑셀)</b>한 파일을 고르면, 날짜·금액·분류를 알아서 찾아 이 장부로 옮겨요. 옮기기 전에 미리보기로 확인할 수 있어요.</div>
+    <label class="filepick"><input type="file" id="impFile" accept=".csv,.tsv,.txt,.xlsx,.xls,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"><span>파일 고르기</span></label>
+    <div class="muted small">같은 파일을 두 번 가져와도 기록이 겹치지 않아요. 잘못 가져오면 아래 목록에서 한 번에 지울 수 있어요.</div>
+    <div id="impHistory"></div>`;
+  document.getElementById("impFile").addEventListener("change",e=>{ const f=e.target.files[0]; if(f) impRead(f); });
+  impHistory();
+}
+async function impHistory(){
+  const box=document.getElementById("impHistory"); if(!box) return;
+  const {data,error}=await sb.from("docs").select("id,data").eq("collection","imports");
+  if(error||!data||!data.length){ box.innerHTML=""; return; }
+  box.innerHTML=`<div class="dayhead" style="padding-top:6px"><span>가져온 기록</span></div><div class="list">${data.sort((a,b)=>(b.data.at||0)-(a.data.at||0)).map(r=>`<div class="item" style="cursor:default"><span class="t">${esc(r.data.name||"파일")}</span><span class="a"><button type="button" class="btn sm ghost" data-imp-del="${esc(r.id)}">지우기</button></span><span class="m">${esc(r.data.from||"")}~${esc(r.data.to||"")} · 지출 ${r.data.expenses||0}건 · 수입 ${r.data.income||0}건</span></div>`).join("")}</div>`;
+}
+async function impDelete(id, btn){
+  if(btn.dataset.confirm!=="1"){ btn.dataset.confirm="1"; btn.textContent="정말 지우기"; btn.classList.add("danger"); return; }
+  btn.disabled=true; btn.textContent="지우는 중…";
+  try{
+    for(const col of ["expenses","income"]){ const {error}=await sb.from("docs").delete().eq("collection",col).eq("data->>importId",id); if(error) throw error; }
+    await sb.from("docs").delete().eq("collection","imports").eq("id",id);
+    toast("가져온 기록을 지웠어요"); S.db.refresh?.(); impHistory();
+  }catch(e){ console.error(e); toast("지우지 못했어요. 잠시 후 다시 시도해주세요."); btn.disabled=false; btn.textContent="지우기"; }
+}
+async function impRead(file){
+  const b=document.getElementById("impBody"); b.innerHTML=`<div class="muted">파일을 읽는 중이에요…</div>`;
+  IMP.name=file.name.replace(/\.[^.]+$/,"");
+  try{
+    let grid;
+    if(/\.xlsx?$/i.test(file.name)){
+      if(!window.XLSX) await new Promise((ok,no)=>{ const s=document.createElement("script"); s.src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"; s.onload=ok; s.onerror=()=>no(new Error("엑셀 읽기 도구를 불러오지 못했어요. 인터넷 연결을 확인하거나 CSV로 내보내 주세요.")); document.head.appendChild(s); });
+      const wb=XLSX.read(await file.arrayBuffer(),{type:"array",cellDates:true});
+      // 기록이 가장 많은 시트 사용
+      const sheets=wb.SheetNames.map(n=>XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,raw:false,dateNF:"yyyy-mm-dd",defval:""}));
+      grid=sheets.sort((a,b)=>b.length-a.length)[0]||[];
+    } else {
+      const buf=await file.arrayBuffer();
+      let text=new TextDecoder("utf-8").decode(buf);
+      if((text.match(/�/g)||[]).length>3){ try{ text=new TextDecoder("euc-kr").decode(buf); }catch(e){} }
+      grid=parseCSV(text.replace(/^﻿/,""));
+    }
+    impSetup(grid);
+  }catch(e){ console.error(e); b.innerHTML=`<div class="neg small">${esc(e.message||"파일을 읽지 못했어요.")}</div>`; setTimeout(impStart,2500); }
+}
+function parseCSV(t){
+  const first=t.split(/\r?\n/,1)[0]||"", d=[",","\t",";"].sort((a,b)=>first.split(b).length-first.split(a).length)[0];
+  const rows=[]; let row=[], cell="", q=false;
+  for(let i=0;i<t.length;i++){ const c=t[i];
+    if(q){ if(c==='"'){ if(t[i+1]==='"'){ cell+='"'; i++; } else q=false; } else cell+=c; continue; }
+    if(c==='"') q=true; else if(c===d){ row.push(cell); cell=""; } else if(c==="\n"||c==="\r"){ if(c==="\r"&&t[i+1]==="\n") i++; row.push(cell); rows.push(row); row=[]; cell=""; } else cell+=c; }
+  if(cell!==""||row.length){ row.push(cell); rows.push(row); }
+  return rows.filter(r=>r.some(x=>String(x).trim()!==""));
+}
+const impKey=s=>String(s||"").replace(/\s/g,"");
+function impSetup(grid){
+  // 머리글 줄: 앞쪽 15줄 중 알려진 열 이름이 가장 많이 맞는 줄
+  let hi=0, best=-1;
+  grid.slice(0,15).forEach((r,i)=>{ const n=r.filter(c=>IMP_FIELDS.some(f=>f[3].test(impKey(c)))).length; if(n>best){ best=n; hi=i; } });
+  const head=(grid[hi]||[]).map(c=>String(c).trim()), rows=grid.slice(hi+1);
+  const used=new Set(), map={};
+  for(const [k,,,re] of IMP_FIELDS){ const i=head.findIndex((h,j)=>!used.has(j) && re.test(impKey(h))); map[k]= i>=0? i : -1; if(i>=0) used.add(i); }
+  if(map.amount<0 && map.inAmount>=0){ map.amount=map.inAmount; map.inAmount=-1; }
+  Object.assign(IMP,{rows,head,map,catMap:{}});
+  IMP.method= incenLimit()? "신한" : "신한";
+  impRender();
+}
+function impCatGuess(src){
+  const s=impKey(src);
+  if(!s) return "기타";
+  const n=normCat({category:src}).category; if(VAR_CATS.includes(n)) return n;
+  const R=[[/이체|카드대금|저축|적금|투자|대출|상환|주거|월세|관리비|공과금|통신|보험|구독|세금|자산|환전/,SKIP],
+    [/카페|커피|간식|디저트|베이커리|음료/,"카페·간식"],[/식|외식|배달|음식|식료품|장보기|편의점/,"식비"],
+    [/교통|자동차|차량|주유|택시|대중교통|주차|통행/,"교통"],[/술|유흥|모임|데이트|회식|약속|밥약|여가|문화|여행|취미/,"약속·모임"],
+    [/쇼핑|의류|패션|미용|뷰티|잡화|온라인/,"쇼핑"],[/생활|마트|생필품|가구|가전|육아|반려|주방|세탁/,"생활용품"],
+    [/의료|병원|약국|약값|약품|영양제|건강|운동|헬스/,"의료·건강"],[/교육|학습|도서|책|자기계발|강의|학원/,"자기계발"],[/경조|선물|축의|부의|기부|용돈|가족/,"경조사"]];
+  for(const [re,c] of R) if(re.test(s)) return c;
+  return "기타";
+}
+function impAmt(v){ const s=String(v??"").replace(/[,\s원₩]/g,""); if(!s) return NaN; const neg=/^-|^\(.*\)$|-$/.test(s); const n=Number(s.replace(/[^0-9.]/g,"")); return n? (neg?-n:n) : NaN; }
+function impDate(v){
+  if(v instanceof Date && !isNaN(v)) return ymd(v);
+  const s=String(v||"").trim(); let m;
+  if((m=/^(\d{4})[.\-\/년\s]*(\d{1,2})[.\-\/월\s]*(\d{1,2})/.exec(s))) return `${m[1]}-${m[2].padStart(2,"0")}-${m[3].padStart(2,"0")}`;
+  if((m=/^(\d{4})(\d{2})(\d{2})/.exec(s))) return `${m[1]}-${m[2]}-${m[3]}`;
+  if((m=/^(\d{1,2})[.\-\/](\d{1,2})[.\-\/](\d{2,4})/.exec(s))){ const y=m[3].length===2? "20"+m[3] : m[3]; return `${y}-${m[1].padStart(2,"0")}-${m[2].padStart(2,"0")}`; }
+  if(/^\d{5}(\.\d+)?$/.test(s)){ const d=new Date(Date.UTC(1899,11,30)+Number(s)*864e5); return d.toISOString().slice(0,10); }
+  return "";
+}
+// 파일 → 장부 기록 목록
+function impBuild(){
+  const {rows,map}=IMP, cell=(r,k)=> map[k]>=0? r[map[k]] : "";
+  const hasNeg=rows.some(r=>impAmt(cell(r,"amount"))<0);
+  const out={exp:[],inc:[],skip:0,transfer:0,cats:{}};
+  for(const r of rows){
+    const date=impDate(cell(r,"date")); if(!date){ out.skip++; continue; }
+    let kind="exp", amount=impAmt(cell(r,"amount"));
+    const inA= map.inAmount>=0? impAmt(cell(r,"inAmount")) : NaN;
+    const t=impKey(cell(r,"type"));
+    if(!isNaN(inA) && inA>0 && (isNaN(amount)||amount===0)){ kind="inc"; amount=inA; }
+    else if(map.type>=0 && t){ if(/이체|transfer|카드대금|대체/i.test(t)){ out.transfer++; continue; } kind= /수입|입금|income|deposit/i.test(t)? "inc" : "exp"; amount=Math.abs(amount); }
+    else if(hasNeg){ kind= amount<0? "exp" : "inc"; amount=Math.abs(amount); }
+    if(!amount||isNaN(amount)){ out.skip++; continue; }
+    const src=String(cell(r,"category")||"").trim();
+    const memo=[cell(r,"memo"),cell(r,"memo2")].map(x=>String(x||"").trim()).filter(Boolean).join(" · ");
+    if(kind==="exp"){ out.cats[src]=(out.cats[src]||0)+1; out.exp.push({date,amount:Math.round(amount),src,memo}); }
+    else out.inc.push({date,amount:Math.round(amount),src,memo});
+  }
+  return out;
+}
+function impRender(){
+  const b=document.getElementById("impBody"); if(!b||!IMP.rows) return;
+  const o=impBuild();
+  Object.keys(o.cats).forEach(k=>{ if(!(k in IMP.catMap)) IMP.catMap[k]=impCatGuess(k); });
+  const exp=o.exp.filter(e=>IMP.catMap[e.src]!==SKIP), skipCat=o.exp.length-exp.length;
+  const dates=[...exp,...o.inc].map(x=>x.date).sort();
+  const colOpt=k=>`<option value="-1">없음</option>`+IMP.head.map((h,i)=>`<option value="${i}" ${IMP.map[k]===i?"selected":""}>${esc(h||`(${i+1}번째 열)`)}</option>`).join("");
+  const catOpts=v=>[...VAR_CATS.map(c=>[c,c]),[SKIP,"가져오지 않음"]].map(([c,l])=>`<option value="${esc(c)}" ${c===v?"selected":""}>${esc(l)}</option>`).join("");
+  const sample=exp.slice(0,4);
+  b.innerHTML=`<div class="impfile"><b>${esc(IMP.name)}</b> <span class="muted small">${IMP.rows.length}줄</span> <button type="button" class="link" id="impAgain">다른 파일</button></div>
+    <div class="invgrid">
+      <div><span class="l">지출</span><span class="v num">${exp.length}건</span></div>
+      <div><span class="l">수입</span><span class="v num">${o.inc.length}건</span></div>
+      <div><span class="l">기간</span><span class="v num" style="font-size:13px">${dates.length? dates[0].slice(2,7).replace("-",".")+"~"+dates[dates.length-1].slice(2,7).replace("-",".") : "-"}</span></div>
+    </div>
+    <div class="muted small">${[skipCat?`고정비·이체 분류 ${skipCat}건`:"", o.transfer?`이체 ${o.transfer}건`:"", o.skip?`날짜·금액을 못 읽은 ${o.skip}줄`:""].filter(Boolean).join(" · ")}${skipCat||o.transfer||o.skip?"은 건너뛰어요.":""} 고정비(월세·통신비 등)는 '수입·고정' 탭에 따로 넣어야 이중으로 잡히지 않아요.</div>
+    <details class="impsec" ${IMP.map.date<0||IMP.map.amount<0?"open":""}><summary>열 맞추기 ${IMP.map.date<0||IMP.map.amount<0?`<span class="neg">· 날짜·금액 열을 골라주세요</span>`:`<span class="muted">· 자동으로 찾았어요</span>`}</summary>
+      <div class="impgrid">${IMP_FIELDS.map(([k,l,req])=>`<label>${l}${req?" *":""}</label><select data-imp-col="${k}">${colOpt(k)}</select>`).join("")}</div></details>
+    <details class="impsec" open><summary>분류 맞추기 <span class="muted">· ${Object.keys(o.cats).length}개</span></summary>
+      <div class="impgrid">${Object.entries(o.cats).sort((a,b)=>b[1]-a[1]).map(([k,n])=>`<label>${esc(k||"(분류 없음)")} <span class="muted">${n}</span></label><select data-imp-cat="${esc(k)}">${catOpts(IMP.catMap[k])}</select>`).join("")}</div></details>
+    <div class="field"><span class="lbl">지출 결제수단</span><div class="quick" id="impMethod">${methodOpts().map(m=>`<button type="button" class="chip" aria-pressed="${m===IMP.method}" data-val="${m}">${esc(mL(m))}</button>`).join("")}</div><span class="hint">가져온 기록은 통장 자동 차감에는 들어가지 않아요.</span></div>
+    ${sample.length?`<div class="dayhead" style="padding-top:0"><span>미리보기</span></div><div class="list">${sample.map(e=>`<div class="item" style="cursor:default"><span class="t">${esc(e.memo||e.src||"지출")}</span><span class="a num">${won(e.amount)}</span><span class="m">${dLabel(e.date)} · ${esc(IMP.catMap[e.src])}${e.src&&e.src!==IMP.catMap[e.src]?` <span class="muted">(${esc(e.src)})</span>`:""}</span></div>`).join("")}</div>`:""}`;
+  const go=document.getElementById("impGo"); go.hidden=!(exp.length||o.inc.length); go.disabled=false; go.textContent=`${exp.length+o.inc.length}건 가져오기`;
+  go.onclick=()=>impRun();
+  document.getElementById("impAgain").onclick=impStart;
+  b.querySelectorAll("[data-imp-col]").forEach(s=>s.onchange=()=>{ IMP.map[s.dataset.impCol]=Number(s.value); impRender(); });
+  b.querySelectorAll("[data-imp-cat]").forEach(s=>s.onchange=()=>{ IMP.catMap[s.dataset.impCat]=s.value; impRender(); });
+  b.querySelector("#impMethod").onclick=e=>{ const c=e.target.closest(".chip"); if(!c) return; IMP.method=c.dataset.val; impRender(); };
+}
+async function impRun(){
+  const o=impBuild(), go=document.getElementById("impGo"), hint=document.getElementById("impHint");
+  const exp=o.exp.filter(e=>IMP.catMap[e.src]!==SKIP);
+  const importId="i"+Date.now().toString(36), at=Date.now();
+  const seen={}, idOf=(kind,x)=>{ const k=[kind,x.date,x.amount,x.memo,x.src].join("|"); seen[k]=(seen[k]||0)+1; let h=5381; for(const ch of k+"#"+seen[k]) h=((h<<5)+h+ch.charCodeAt(0))>>>0; return "imp-"+x.date.replace(/-/g,"")+"-"+h.toString(36); };
+  const ts=d=>Date.parse(d+"T12:00:00+09:00");
+  const docs=[
+    ...exp.map(e=>({collection:"expenses", id:idOf("e",e), data:{date:e.date, month:e.date.slice(0,7), amount:e.amount, method:IMP.method, category:IMP.catMap[e.src]||"기타", memo:e.memo||e.src||"", plan:"", reimb:0, reimbDone:false, unplanned:false, selfcare:false, createdAt:ts(e.date), source:"import", importId}})),
+    ...o.inc.map(x=>({collection:"income", id:idOf("i",x), data:{date:x.date, month:x.date.slice(0,7), label:x.memo||x.src||"수입", amount:x.amount, note:x.src&&x.memo?x.src:"", createdAt:ts(x.date), source:"import", importId}})),
+  ];
+  go.disabled=true;
+  try{
+    const added=new Set();
+    for(let i=0;i<docs.length;i+=400){
+      // 이미 있는 기록은 건너뛰고, 새로 들어간 것만 돌려받음
+      const {data,error}=await sb.from("docs").upsert(docs.slice(i,i+400),{onConflict:"owner,collection,id",ignoreDuplicates:true}).select("collection,id"); if(error) throw error;
+      (data||[]).forEach(r=>added.add(r.collection+"/"+r.id));
+      go.textContent=`가져오는 중… ${Math.min(docs.length,i+400)}/${docs.length}`;
+    }
+    const newDocs=docs.filter(d=>added.has(d.collection+"/"+d.id)), nE=newDocs.filter(d=>d.collection==="expenses").length, nI=newDocs.length-nE;
+    const dates=(newDocs.length?newDocs:docs).map(d=>d.data.date).sort();
+    if(newDocs.length) await sb.from("docs").upsert({collection:"imports", id:importId, data:{name:IMP.name, at, expenses:nE, income:nI, from:dates[0], to:dates[dates.length-1]}},{onConflict:"owner,collection,id"});
+    S.db.refresh?.();
+    toast(newDocs.length? `${newDocs.length}건을 가져왔어요` : "이미 모두 들어 있는 기록이에요");
+    hint.textContent=""; go.hidden=true; IMP.rows=null;
+    document.getElementById("impBody").innerHTML=`<div class="empty">${newDocs.length? `가져오기를 마쳤어요. 지출 ${nE}건 · 수입 ${nI}건이 ${dates[0]}부터 ${dates[dates.length-1]}까지 들어갔어요.` : "이 파일의 기록은 이미 모두 들어 있어요."}${docs.length-newDocs.length? ` 이미 있던 ${docs.length-newDocs.length}건은 건너뛰었어요.`:""}<div><button type="button" class="btn sm" id="impAgain2">다른 파일 가져오기</button></div></div><div id="impHistory"></div>`;
+    document.getElementById("impAgain2").onclick=impStart; impHistory();
+  }catch(e){ console.error(e); toast("가져오지 못했어요. 잠시 후 다시 시도해주세요."); go.disabled=false; go.textContent="다시 시도"; }
 }
 
 // ---------- 카테고리별 소비 시트: 위쪽 카테고리 칩, 고르면 그 카테고리 내역 ----------
@@ -1278,6 +1492,7 @@ document.addEventListener("click", async e=>{
   const tabBtn=t.closest("nav.tabs button"); if(tabBtn){ setTab(tabBtn.dataset.tab); return; }
   const go=t.closest("[data-tab-go]"); if(go){ setTab(go.dataset.tabGo); return; }
   const pd=t.closest("[data-plan-detail]"); if(pd){ openPlanDetail(pd.dataset.planDetail); return; }
+  const idel=t.closest("[data-imp-del]"); if(idel){ impDelete(idel.dataset.impDel, idel); return; }
   const cs=t.closest("[data-cat-sel]"); if(cs){ renderCat(cs.dataset.catSel); return; }
   const ed=t.closest("[data-edit]"); if(ed){ openSheet(ed.dataset.edit, ed.dataset.id); return; }
   const ao=t.closest("[data-auto-ok]"); if(ao){ const id=ao.dataset.autoOk; const ids= id==="all"? S.expenses.filter(e=>e.auto&&!e.reviewed).map(e=>e.id) : [id];
@@ -1296,6 +1511,9 @@ document.addEventListener("click", async e=>{
   if(act==="add-exp-day"){ openSheet("expense", null, {date:t.closest("[data-act]").dataset.date}); return; }
   if(act==="add-dc") openSheet("dc");
   if(act==="incen-detail") openIncenDetail();
+  if(act==="settings"){ openSettings(); return; }
+  if(act==="import"){ openImport(); return; }
+  if(act==="logout"){ await sb.auth.signOut(); try{ localStorage.removeItem("ledger.tab"); }catch(e){} location.reload(); return; }
   if(act==="cat-detail"){ openCatDetail(t.closest("[data-act]").dataset.cat||""); return; }
   if(act==="fixed-suggest"){ const b=t.closest("[data-act]"); openSheet("fixed", null, {name:b.dataset.name, category:b.dataset.cat}); }
   if(act==="copy-income"){ const prev=S.income.filter(x=>x.month===shiftMonth(S.month,-1));
@@ -1397,7 +1615,7 @@ async function refreshLive(force){
   liveBusy=true; try{ const r=await sb.rpc("refresh_prices"); if(force && r?.data?.skipped) setTimeout(()=>refreshLive(true),31000); }catch(e){ console.error(e); } finally{ liveBusy=false; }
 }
 // ---------- 연결 통장: 설정한 잔액에서, 그 뒤에 기록한 신한(체크) 결제만큼 자동 차감 ----------
-function linkedSpent(x){ return sum(S.recent.filter(e=>e.method===x.link && (e.createdAt||0)>(x.baseAt||0)), e=>e.amount); }
+function linkedSpent(x){ return sum(S.recent.filter(e=>e.method===x.link && !e.importId && (e.createdAt||0)>(x.baseAt||0)), e=>e.amount); }
 // 수입 기록에서 '통장 잔액에 더하기'로 이 통장을 고른 돈 (기준 시각 이후 기록만)
 function linkedIn(x){ return sum(S.income.filter(i=>i.deposit===x.id && (i.createdAt||0)>(x.baseAt||0)), i=>i.amount); }
 const linkSynced={};
